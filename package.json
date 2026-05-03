@@ -1,0 +1,30 @@
+{
+  "name": "discordbalancerapi",
+  "version": "1.0.0",
+  "description": "Discord bot that connects to the BalanceAPI",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "deploy-commands": "tsx scripts/deploy-commands.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "ebicep",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "dotenv": "^16.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "eslint": "^9.26.0",
+    "globals": "^16.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.31.1"
+  }
+}
