@@ -52,7 +52,7 @@ export const settings = {
 				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+		await interaction.deferReply();
 		const sub = interaction.options.getSubcommand();
 
 		if (sub === 'list') {
