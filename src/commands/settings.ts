@@ -1,4 +1,5 @@
 import {
+	MessageFlags,
 	type ChatInputCommandInteraction,
 	SlashCommandBuilder,
 } from 'discord.js';
@@ -58,7 +59,7 @@ export const settings = {
 				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-		await interaction.deferReply({ ephemeral: true });
+		await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 		const sub = interaction.options.getSubcommand();
 
 		if (sub === 'list') {
