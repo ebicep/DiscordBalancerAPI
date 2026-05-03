@@ -2,10 +2,11 @@ import 'dotenv/config';
 
 import { REST, Routes } from 'discord.js';
 
-import { loadEnv } from '../src/config/env.js';
+import { getEnv, initializeEnv } from '../src/config/env.js';
 import { commands } from '../src/commands/registry.js';
 
-const env = loadEnv();
+initializeEnv();
+const env = getEnv();
 const rest = new REST().setToken(env.token);
 const body = commands.map((c) => c.data.toJSON());
 
