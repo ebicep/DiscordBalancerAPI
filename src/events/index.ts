@@ -4,6 +4,6 @@ import { registerInteractionCreateHandler } from './interactionCreate.js';
 import { registerReadyHandler } from './ready.js';
 
 export function registerEvents(client: Client): void {
-  registerReadyHandler(client);
-  registerInteractionCreateHandler(client);
+	registerReadyHandler(client);
+	registerInteractionCreateHandler(client);
 }
