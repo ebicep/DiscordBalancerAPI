@@ -11,16 +11,21 @@ export type ApiFetchInit = Omit<RequestInit, 'headers'> & {
 export async function balancerFetch(
 	path: string,
 	init: ApiFetchInit = {},
-): Promise<Response> {
+): Promise<{ response: Response; requestBody?: string }> {
 	const env = getEnv();
 	const url = `${env.balancerApiBaseUrl}/api/v${env.apiVersion}${path.startsWith('/') ? path : `/${path}`}`;
-	const headers: Record<string, string> = {
+	const mergedHeaders: Record<string, string> = {
 		Authorization: `Bearer ${env.balancerApiKey}`,
 		Accept: 'application/json',
 		...(init.headers ?? {}),
 	};
+	const bodyStr = typeof init.body === 'string' ? init.body : undefined;
 	try {
-		return await fetch(url, { ...init, headers });
+		const response = await fetch(url, { ...init, headers: mergedHeaders });
+		return {
+			response,
+			...(bodyStr !== undefined ? { requestBody: bodyStr } : {}),
+		};
 	} catch (err) {
 		console.error('balancerFetch failed', { url, err });
 		let code: string | undefined;

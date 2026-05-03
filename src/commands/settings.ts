@@ -3,7 +3,8 @@ import {
 	SlashCommandBuilder,
 } from 'discord.js';
 import { balancerFetch } from '../api/balancerApi.js';
-import { formatFailedApiResponse } from '../util/apiErrorMessage.js';
+import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import { balancerApiJsonAttachments } from '../util/jsonDiscordAttachment.js';
 
 const MAX_REPLY_LENGTH = 1900;
 
@@ -54,12 +55,19 @@ export const settings = {
 		await interaction.deferReply();
 		const sub = interaction.options.getSubcommand();
 		if (sub === 'list') {
-			const res = await balancerFetch('/settings', { method: 'GET' });
+			const { response: res, requestBody } = await balancerFetch('/settings', {
+				method: 'GET',
+			});
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
-				await interaction.editReply(await formatFailedApiResponse(res));
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...(files.length > 0 ? { files } : {}),
+				});
 				return;
 			}
-			const body = (await res.json()) as SettingsListBody;
+			const body = JSON.parse(rawBody) as SettingsListBody;
 			const entries = Object.entries(body.data ?? {}).sort(([a], [b]) =>
 				a.localeCompare(b),
 			);
@@ -68,33 +76,45 @@ export const settings = {
 				lines.length === 0
 					? '_No settings returned._'
 					: truncate(['```', ...lines, '```'].join('\n'));
-			await interaction.editReply(content);
+			await interaction.editReply({
+				content,
+				...(files.length > 0 ? { files } : {}),
+			});
 			return;
 		}
 		if (sub === 'get') {
 			const key = interaction.options.getString('key', true);
-			const res = await balancerFetch(`/settings/${encodeURIComponent(key)}`, {
-				method: 'GET',
-			});
+			const { response: res, requestBody } = await balancerFetch(
+				`/settings/${encodeURIComponent(key)}`,
+				{
+					method: 'GET',
+				},
+			);
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
-				await interaction.editReply(await formatFailedApiResponse(res));
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...(files.length > 0 ? { files } : {}),
+				});
 				return;
 			}
-			const body = (await res.json()) as SettingOneBody;
+			const body = JSON.parse(rawBody) as SettingOneBody;
 			const d = body.data;
 			const display =
 				d.displayName != null && d.displayName !== ''
 					? `\n**Display:** ${d.displayName}`
 					: '';
-			await interaction.editReply(
-				`**${d.key}** = \`${d.value}\`${display}`,
-			);
+			await interaction.editReply({
+				content: `**${d.key}** = \`${d.value}\`${display}`,
+				...(files.length > 0 ? { files } : {}),
+			});
 			return;
 		}
 		if (sub === 'set') {
 			const key = interaction.options.getString('key', true);
 			const value = interaction.options.getNumber('value', true);
-			const res = await balancerFetch(
+			const { response: res, requestBody } = await balancerFetch(
 				`/settings/${encodeURIComponent(key)}`,
 				{
 					method: 'POST',
@@ -102,13 +122,21 @@ export const settings = {
 					body: JSON.stringify({ value }),
 				},
 			);
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
-				await interaction.editReply(await formatFailedApiResponse(res));
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...(files.length > 0 ? { files } : {}),
+				});
 				return;
 			}
-			const body = (await res.json()) as SettingOneBody;
+			const body = JSON.parse(rawBody) as SettingOneBody;
 			const d = body.data;
-			await interaction.editReply(`Updated **${d.key}** = \`${d.value}\``);
+			await interaction.editReply({
+				content: `Updated **${d.key}** = \`${d.value}\``,
+				...(files.length > 0 ? { files } : {}),
+			});
 			return;
 		}
 	},
