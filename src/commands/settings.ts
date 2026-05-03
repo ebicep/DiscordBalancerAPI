@@ -5,6 +5,7 @@ import {
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
+import { httpFailureLine } from '../util/discordSafeErrors.js';
 
 const MAX_REPLY_LENGTH = 1900;
 
@@ -23,14 +24,6 @@ type SettingOneBody = {
 		displayName: string | null;
 	};
 };
-
-async function safeErrorBody(res: Response): Promise<string> {
-	const text = await res.text();
-	if (text.length > 500) {
-		return `${text.slice(0, 500)}…`;
-	}
-	return text || res.statusText;
-}
 
 export const settings = {
 	data: new SlashCommandBuilder()
@@ -65,9 +58,7 @@ export const settings = {
 		if (sub === 'list') {
 			const res = await balancerFetch('/settings', { method: 'GET' });
 			if (!res.ok) {
-				await interaction.editReply(
-					`Request failed (${res.status}): ${await safeErrorBody(res)}`,
-				);
+				await interaction.editReply(httpFailureLine(res.status));
 				return;
 			}
 			const body = (await res.json()) as SettingsListBody;
@@ -89,13 +80,11 @@ export const settings = {
 				method: 'GET',
 			});
 			if (res.status === 404) {
-				await interaction.editReply(`Setting not found: \`${key}\``);
+				await interaction.editReply('Setting not found.');
 				return;
 			}
 			if (!res.ok) {
-				await interaction.editReply(
-					`Request failed (${res.status}): ${await safeErrorBody(res)}`,
-				);
+				await interaction.editReply(httpFailureLine(res.status));
 				return;
 			}
 			const body = (await res.json()) as SettingOneBody;
@@ -128,9 +117,7 @@ export const settings = {
 				return;
 			}
 			if (!res.ok) {
-				await interaction.editReply(
-					`Request failed (${res.status}): ${await safeErrorBody(res)}`,
-				);
+				await interaction.editReply(httpFailureLine(res.status));
 				return;
 			}
 			const body = (await res.json()) as SettingOneBody;

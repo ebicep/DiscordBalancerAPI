@@ -10,6 +10,7 @@ import {
 } from 'discord.js';
 
 import { commands, type Command } from '../commands/registry.js';
+import { GENERIC_COMMAND_FAILURE } from '../util/discordSafeErrors.js';
 
 function commandMap(commandsList: Command[]): Map<string, Command> {
 	return new Map(commandsList.map((c) => [c.data.name, c]));
@@ -84,16 +85,23 @@ export async function onInteractionCreate(
 		await command.execute(interaction);
 	} catch (err) {
 		console.error(err);
-		if (interaction.replied || interaction.deferred) {
-			await interaction.followUp({
-				content: 'There was an error executing this command.',
-				flags: MessageFlags.Ephemeral,
-			});
-		} else {
-			await interaction.reply({
-				content: 'There was an error executing this command.',
-				flags: MessageFlags.Ephemeral,
-			});
+		const content = GENERIC_COMMAND_FAILURE;
+		try {
+			if (interaction.deferred) {
+				await interaction.editReply({ content });
+			} else if (interaction.replied) {
+				await interaction.followUp({
+					content,
+					flags: MessageFlags.Ephemeral,
+				});
+			} else {
+				await interaction.reply({
+					content,
+					flags: MessageFlags.Ephemeral,
+				});
+			}
+		} catch (replyErr) {
+			console.error(replyErr);
 		}
 	}
 }
