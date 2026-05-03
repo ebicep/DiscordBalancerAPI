@@ -2,8 +2,8 @@ import {
 	type ChatInputCommandInteraction,
 	SlashCommandBuilder,
 } from 'discord.js';
-import { balancerFetch } from '../api/balancerApi.js';
-import { formatFailedApiResponse } from '../util/apiErrorMessage.js';
+import {balancerFetch} from '../api/balancerApi.js';
+import {formatFailedApiResponse} from '../util/apiErrorMessage.js';
 
 const MAX_REPLY_LENGTH = 1900;
 
@@ -27,7 +27,7 @@ function seasonBodyFields(body: LatestSeasonBody): { season: number; ts: string 
 	if (typeof season !== 'number' || typeof ts !== 'string') {
 		return null;
 	}
-	return { season, ts };
+	return {season, ts};
 }
 
 function responseJsonBlock(body: unknown): string {
@@ -93,7 +93,7 @@ export const time = {
 		await interaction.deferReply();
 		const sub = interaction.options.getSubcommand();
 		if (sub === 'season') {
-			const res = await balancerFetch('/time/season', { method: 'GET' });
+			const res = await balancerFetch('/time/season', {method: 'GET'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
@@ -110,7 +110,7 @@ export const time = {
 			return;
 		}
 		if (sub === 'new-day') {
-			const res = await balancerFetch('/time/new-day', { method: 'POST' });
+			const res = await balancerFetch('/time/new-day', {method: 'POST'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
@@ -120,7 +120,7 @@ export const time = {
 			return;
 		}
 		if (sub === 'new-week') {
-			const res = await balancerFetch('/time/new-week', { method: 'POST' });
+			const res = await balancerFetch('/time/new-week', {method: 'POST'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
@@ -130,7 +130,7 @@ export const time = {
 			return;
 		}
 		if (sub === 'new-season') {
-			const res = await balancerFetch('/time/new-season', { method: 'POST' });
+			const res = await balancerFetch('/time/new-season', {method: 'POST'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
@@ -141,7 +141,7 @@ export const time = {
 		}
 		if (sub === 'undo-day') {
 			const dayId = interaction.options.getInteger('day_id', true);
-			const res = await balancerFetch(`/time/day/${dayId}`, { method: 'DELETE' });
+			const res = await balancerFetch(`/time/day/${dayId}`, {method: 'DELETE'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
@@ -151,7 +151,7 @@ export const time = {
 		}
 		if (sub === 'undo-week') {
 			const weekId = interaction.options.getInteger('week_id', true);
-			const res = await balancerFetch(`/time/week/${weekId}`, { method: 'DELETE' });
+			const res = await balancerFetch(`/time/week/${weekId}`, {method: 'DELETE'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
@@ -161,7 +161,7 @@ export const time = {
 		}
 		if (sub === 'undo-season') {
 			const seasonId = interaction.options.getInteger('season_id', true);
-			const res = await balancerFetch(`/time/season/${seasonId}`, { method: 'DELETE' });
+			const res = await balancerFetch(`/time/season/${seasonId}`, {method: 'DELETE'});
 			if (!res.ok) {
 				await interaction.editReply(await formatFailedApiResponse(res));
 				return;

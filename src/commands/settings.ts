@@ -1,11 +1,9 @@
 import {
-	MessageFlags,
 	type ChatInputCommandInteraction,
 	SlashCommandBuilder,
 } from 'discord.js';
-
 import { balancerFetch } from '../api/balancerApi.js';
-import { httpFailureLine } from '../util/discordSafeErrors.js';
+import { formatFailedApiResponse } from '../util/apiErrorMessage.js';
 
 const MAX_REPLY_LENGTH = 1900;
 
@@ -17,6 +15,7 @@ function truncate(content: string): string {
 }
 
 type SettingsListBody = { data: Record<string, number> };
+
 type SettingOneBody = {
 	data: {
 		key: string;
@@ -54,11 +53,10 @@ export const settings = {
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
 		const sub = interaction.options.getSubcommand();
-
 		if (sub === 'list') {
 			const res = await balancerFetch('/settings', { method: 'GET' });
 			if (!res.ok) {
-				await interaction.editReply(httpFailureLine(res.status));
+				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
 			}
 			const body = (await res.json()) as SettingsListBody;
@@ -73,18 +71,13 @@ export const settings = {
 			await interaction.editReply(content);
 			return;
 		}
-
 		if (sub === 'get') {
 			const key = interaction.options.getString('key', true);
 			const res = await balancerFetch(`/settings/${encodeURIComponent(key)}`, {
 				method: 'GET',
 			});
-			if (res.status === 404) {
-				await interaction.editReply('Setting not found.');
-				return;
-			}
 			if (!res.ok) {
-				await interaction.editReply(httpFailureLine(res.status));
+				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
 			}
 			const body = (await res.json()) as SettingOneBody;
@@ -98,7 +91,6 @@ export const settings = {
 			);
 			return;
 		}
-
 		if (sub === 'set') {
 			const key = interaction.options.getString('key', true);
 			const value = interaction.options.getNumber('value', true);
@@ -110,14 +102,8 @@ export const settings = {
 					body: JSON.stringify({ value }),
 				},
 			);
-			if (res.status === 403) {
-				await interaction.editReply(
-					'Forbidden (403). This API key may lack SettingsWrite permission.',
-				);
-				return;
-			}
 			if (!res.ok) {
-				await interaction.editReply(httpFailureLine(res.status));
+				await interaction.editReply(await formatFailedApiResponse(res));
 				return;
 			}
 			const body = (await res.json()) as SettingOneBody;
