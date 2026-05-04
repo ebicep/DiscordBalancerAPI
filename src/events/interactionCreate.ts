@@ -9,6 +9,8 @@ import {
 	type Interaction,
 } from 'discord.js';
 
+import { handleBalanceButton } from '../commands/balanceButtonHandler.js';
+import { isExperimentalBalanceButton } from '../commands/balanceButtons.js';
 import { commands, type Command } from '../commands/registry.js';
 import { GENERIC_COMMAND_FAILURE } from '../util/discordSafeErrors.js';
 
@@ -70,6 +72,33 @@ function logSlashCommand(interaction: ChatInputCommandInteraction): void {
 export async function onInteractionCreate(
 	interaction: Interaction,
 ): Promise<void> {
+	if (interaction.isButton()) {
+		if (!isExperimentalBalanceButton(interaction.customId)) {
+			return;
+		}
+		try {
+			await handleBalanceButton(interaction);
+		} catch (err) {
+			console.error(err);
+			try {
+				if (interaction.deferred || interaction.replied) {
+					await interaction.followUp({
+						content: GENERIC_COMMAND_FAILURE,
+						flags: MessageFlags.Ephemeral,
+					});
+				} else {
+					await interaction.reply({
+						content: GENERIC_COMMAND_FAILURE,
+						flags: MessageFlags.Ephemeral,
+					});
+				}
+			} catch (replyErr) {
+				console.error(replyErr);
+			}
+		}
+		return;
+	}
+
 	if (!interaction.isChatInputCommand()) {
 		return;
 	}
