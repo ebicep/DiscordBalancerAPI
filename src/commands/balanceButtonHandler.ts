@@ -207,7 +207,11 @@ export async function handleBalanceButton(
 			...fileOpts(files),
 		});
 
-		const pair = experimentalBalanceEmbeds(cached.lastResponse);
+		const threadUrl =
+			interaction.guildId !== null
+				? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}`
+				: undefined;
+		const pair = experimentalBalanceEmbeds(cached.lastResponse, threadUrl);
 		const second = pair[1];
 		if (second !== undefined) {
 			try {

@@ -141,6 +141,7 @@ function formatBalancePrimaryFooter(meta: ExperimentalBalanceMetaJson): string {
 
 export function experimentalBalanceEmbeds(
 	data: ExperimentalBalanceResponseJson,
+	threadUrl?: string,
 ): EmbedBuilder[] {
 	const teams = data.balance ?? [];
 
@@ -192,6 +193,13 @@ export function experimentalBalanceEmbeds(
 			inline: true,
 		};
 	});
+	if (typeof threadUrl === 'string' && threadUrl.length > 0) {
+		specFields.push({
+			name: '',
+			value: `${threadUrl}`,
+			inline: false,
+		});
+	}
 
 	const seasonString = `(S${data.meta.season})`;
 	const embed2 = new EmbedBuilder()
