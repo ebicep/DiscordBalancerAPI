@@ -1,7 +1,7 @@
 import {
-	EmbedBuilder,
 	type ButtonInteraction,
 	MessageFlags,
+	type MessageEditOptions,
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
@@ -30,6 +30,13 @@ import {
 const fileOpts = (files: ReturnType<typeof balancerApiJsonAttachments>) =>
 	files.length > 0 ? { files } : {};
 
+async function editBalanceButtons(
+	interaction: ButtonInteraction,
+	components: MessageEditOptions['components'],
+): Promise<void> {
+	await interaction.message.edit({ components });
+}
+
 export async function handleBalanceButton(
 	interaction: ButtonInteraction,
 ): Promise<void> {
@@ -46,29 +53,17 @@ export async function handleBalanceButton(
 
 	if (id === EXPBAL_CANCEL) {
 		await interaction.deferUpdate();
-		const embeds = interaction.message.embeds.map((e) => EmbedBuilder.from(e));
-		await interaction.editReply({
-			content: interaction.message.content ?? undefined,
-			embeds,
-			components: [
-				buildCancelledBalanceRow(balanceActorDisplayName(interaction)),
-			],
-		});
+		await editBalanceButtons(interaction, [
+			buildCancelledBalanceRow(balanceActorDisplayName(interaction)),
+		]);
 		return;
 	}
 
 	if (id === EXPBAL_REBAL) {
 		await interaction.deferUpdate();
-		const snapshotEmbeds = interaction.message.embeds.map((e) =>
-			EmbedBuilder.from(e),
-		);
-		await interaction.editReply({
-			content: interaction.message.content ?? undefined,
-			embeds: snapshotEmbeds,
-			components: [
-				buildRebalConsumedRow(balanceActorDisplayName(interaction)),
-			],
-		});
+		await editBalanceButtons(interaction, [
+			buildRebalConsumedRow(balanceActorDisplayName(interaction)),
+		]);
 		const body = JSON.stringify({ players: cached.players });
 		const { response: res, requestBody } = await balancerFetch(
 			'/experimental/balance',
@@ -81,13 +76,9 @@ export async function handleBalanceButton(
 		const rawBody = await res.text();
 		const files = balancerApiJsonAttachments(requestBody, rawBody);
 		if (!res.ok) {
-			await interaction.editReply({
-				content: interaction.message.content ?? undefined,
-				embeds: snapshotEmbeds,
-				components: [
-					buildBalanceButtonRow(cached.lastResponse.balance_id),
-				],
-			});
+			await editBalanceButtons(interaction, [
+				buildBalanceButtonRow(cached.lastResponse.balance_id),
+			]);
 			await interaction.followUp({
 				content: formatFailedApiBody(res.status, rawBody),
 				flags: MessageFlags.Ephemeral,
@@ -98,13 +89,9 @@ export async function handleBalanceButton(
 		const parsedUnknown = parseJsonBody(rawBody);
 		const parsed = parseExperimentalBalanceResponse(parsedUnknown);
 		if (parsed === null) {
-			await interaction.editReply({
-				content: interaction.message.content ?? undefined,
-				embeds: snapshotEmbeds,
-				components: [
-					buildBalanceButtonRow(cached.lastResponse.balance_id),
-				],
-			});
+			await editBalanceButtons(interaction, [
+				buildBalanceButtonRow(cached.lastResponse.balance_id),
+			]);
 			await interaction.followUp({
 				content: 'Balance API returned an unexpected JSON shape.',
 				flags: MessageFlags.Ephemeral,
@@ -115,13 +102,9 @@ export async function handleBalanceButton(
 		const embeds = experimentalBalanceEmbeds(parsed);
 		const first = embeds[0];
 		if (first === undefined) {
-			await interaction.editReply({
-				content: interaction.message.content ?? undefined,
-				embeds: snapshotEmbeds,
-				components: [
-					buildBalanceButtonRow(cached.lastResponse.balance_id),
-				],
-			});
+			await editBalanceButtons(interaction, [
+				buildBalanceButtonRow(cached.lastResponse.balance_id),
+			]);
 			await interaction.followUp({
 				content: 'Could not build balance embed.',
 				flags: MessageFlags.Ephemeral,
@@ -134,13 +117,9 @@ export async function handleBalanceButton(
 			!sendTarget.isTextBased() ||
 			sendTarget.isDMBased()
 		) {
-			await interaction.editReply({
-				content: interaction.message.content ?? undefined,
-				embeds: snapshotEmbeds,
-				components: [
-					buildBalanceButtonRow(cached.lastResponse.balance_id),
-				],
-			});
+			await editBalanceButtons(interaction, [
+				buildBalanceButtonRow(cached.lastResponse.balance_id),
+			]);
 			await interaction.followUp({
 				content: 'Cannot post rebalance in this channel.',
 				flags: MessageFlags.Ephemeral,
@@ -156,13 +135,9 @@ export async function handleBalanceButton(
 			});
 		} catch (err) {
 			console.error('balance rebal send failed', err);
-			await interaction.editReply({
-				content: interaction.message.content ?? undefined,
-				embeds: snapshotEmbeds,
-				components: [
-					buildBalanceButtonRow(cached.lastResponse.balance_id),
-				],
-			});
+			await editBalanceButtons(interaction, [
+				buildBalanceButtonRow(cached.lastResponse.balance_id),
+			]);
 			await interaction.followUp({
 				content: 'Failed to post the new balance message.',
 				flags: MessageFlags.Ephemeral,
@@ -197,15 +172,21 @@ export async function handleBalanceButton(
 			});
 			return;
 		}
-		const embeds = interaction.message.embeds.map((e) => EmbedBuilder.from(e));
-		await interaction.editReply({
-			content: '',
-			embeds,
-			components: [
-				buildPostedBalanceRow(balanceActorDisplayName(interaction)),
-			],
-			...fileOpts(files),
-		});
+		await editBalanceButtons(interaction, [
+			buildPostedBalanceRow(balanceActorDisplayName(interaction)),
+		]);
+		if (files.length > 0) {
+			const channel = interaction.channel;
+			if (
+				channel !== null &&
+				channel.isTextBased() &&
+				!channel.isDMBased()
+			) {
+				await channel.send({
+					...fileOpts(files),
+				});
+			}
+		}
 
 		const threadUrl =
 			interaction.guildId !== null
