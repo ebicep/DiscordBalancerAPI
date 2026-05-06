@@ -1,4 +1,5 @@
 import {
+	EmbedBuilder,
 	type ButtonInteraction,
 	MessageFlags,
 	type MessageEditOptions,
@@ -200,7 +201,23 @@ export async function handleBalanceButton(
 					BALANCE_POST_RESULT_CHANNEL_ID,
 				);
 				if (target !== null && target.isTextBased() && !target.isDMBased()) {
-					await target.send({ embeds: [second] });
+					const postedMessage = await target.send({ embeds: [second] });
+					const originChannel = interaction.channel;
+					if (
+						originChannel !== null &&
+						originChannel.isTextBased() &&
+						!originChannel.isDMBased()
+					) {
+						try {
+							await originChannel.send({
+								embeds: [
+									new EmbedBuilder().setDescription(postedMessage.url),
+								],
+							});
+						} catch (linkErr) {
+							console.error('balance post link message failed', linkErr);
+						}
+					}
 				}
 			} catch (e) {
 				console.error('balance post-result channel send failed', e);
