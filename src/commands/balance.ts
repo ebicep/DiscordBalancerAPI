@@ -41,7 +41,7 @@ export function parsePlayersString(raw: string): string[] {
 
 export const balance = {
 	data: new SlashCommandBuilder()
-		.setName('balance')
+		.setName('experimental')
 		.setDescription('Experimental balance API (run, confirm, input, …)')
 		.addSubcommand((sub) =>
 			sub
@@ -199,7 +199,7 @@ export const balance = {
 			if (!(ch instanceof TextChannel || ch instanceof NewsChannel)) {
 				await interaction.followUp({
 					content:
-						'Use `/balance run` in a text or announcement channel so a thread can be created.',
+						'Use `/experimental run` in a text or announcement channel so a thread can be created.',
 					flags: MessageFlags.Ephemeral,
 				});
 				return;
