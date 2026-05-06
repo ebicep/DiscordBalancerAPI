@@ -51,6 +51,17 @@ function formatAdjustLine(
 	return `Adjusted ${name} (${label}) from ${oldWeight} > ${newWeight} (${signed(diff)})`;
 }
 
+function formatAutoDailyAdjustLine(
+	name: string,
+	label: string,
+	oldWeight: number,
+	newWeight: number,
+	oldTrajectory: number,
+	newTrajectory: number,
+): string {
+	return `${formatAdjustLine(name, label, oldWeight, newWeight)} [${oldTrajectory} > ${newTrajectory}]`;
+}
+
 const MAX_THREAD_NAME_LEN = 100;
 
 function clampThreadName(raw: string): string {
@@ -115,6 +126,8 @@ type AutoDailyEntry = {
 	name: string;
 	previousWeight: number;
 	currentWeight: number;
+	previousTrajectory: number;
+	newTrajectory: number;
 };
 
 type AutoDailyBody = {
@@ -145,12 +158,12 @@ function autoDailyThreadTitle(body: AutoDailyBody): string {
 	if (first === undefined) {
 		return `Auto-daily (${body.count} players)`;
 	}
-	return formatAdjustThreadTitle(
+	return `${formatAdjustThreadTitle(
 		first.name,
 		'BASE',
 		first.previousWeight,
 		first.currentWeight,
-	);
+	)} [${first.previousTrajectory} > ${first.newTrajectory}]`;
 }
 
 function formatAutoDailyContent(body: AutoDailyBody): string {
@@ -163,11 +176,13 @@ function formatAutoDailyContent(body: AutoDailyBody): string {
 	let truncated = false;
 	let usedLen = 0;
 	for (const e of entries) {
-		const line = formatAdjustLine(
+		const line = formatAutoDailyAdjustLine(
 			e.name,
 			'BASE',
 			e.previousWeight,
 			e.currentWeight,
+			e.previousTrajectory,
+			e.newTrajectory,
 		);
 		const projected = usedLen + line.length + 1;
 		if (projected > MAX_AUTO_DAILY_BLOCK_LEN) {
