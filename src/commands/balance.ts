@@ -172,7 +172,7 @@ export const balance = {
 			}
 
 			await interaction.editReply({
-				content: playersRaw,
+				content: `\`\`\`\n${playersRaw}\n\`\`\``,
 			});
 			const starterMsg = await interaction.fetchReply();
 
