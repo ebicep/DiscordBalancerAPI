@@ -1,13 +1,5 @@
 import { httpFailureLine } from './discordSafeErrors.js';
-
-const MAX_LEN = 1900;
-
-function truncate(s: string): string {
-	if (s.length <= MAX_LEN) {
-		return s;
-	}
-	return `${s.slice(0, MAX_LEN)}…`;
-}
+import { truncatePlainToMax } from './discordText.js';
 
 function pickProblemJsonMessage(parsed: Record<string, unknown>): string | null {
 	const title =
@@ -57,14 +49,14 @@ export function formatFailedApiBody(status: number, raw: string): string {
 		if (parsed !== null && typeof parsed === 'object') {
 			const msg = pickProblemJsonMessage(parsed as Record<string, unknown>);
 			if (msg !== null) {
-				return truncate(msg);
+				return truncatePlainToMax(msg);
 			}
-			return truncate(JSON.stringify(parsed, null, 2));
+			return truncatePlainToMax(JSON.stringify(parsed, null, 2));
 		}
 	} catch {
 		// not JSON
 	}
-	return truncate(trimmed);
+	return truncatePlainToMax(trimmed);
 }
 
 /** User-visible text from a non-OK `fetch` response (reads and consumes the body). */

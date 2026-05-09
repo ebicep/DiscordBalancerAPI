@@ -4,16 +4,8 @@ import {
 } from 'discord.js';
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import { truncateDiscordReply } from '../util/discordText.js';
 import { balancerApiJsonAttachments } from '../util/jsonDiscordAttachment.js';
-
-const MAX_REPLY_LENGTH = 1900;
-
-function truncate(content: string): string {
-	if (content.length <= MAX_REPLY_LENGTH) {
-		return content;
-	}
-	return `${content.slice(0, MAX_REPLY_LENGTH)}…\n_(truncated)_`;
-}
 
 type SettingsListBody = { data: Record<string, number> };
 
@@ -75,7 +67,7 @@ export const settings = {
 			const content =
 				lines.length === 0
 					? '_No settings returned._'
-					: truncate(['```', ...lines, '```'].join('\n'));
+					: truncateDiscordReply(['```', ...lines, '```'].join('\n'));
 			await interaction.editReply({
 				content,
 				...(files.length > 0 ? { files } : {}),

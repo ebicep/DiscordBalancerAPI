@@ -5,7 +5,6 @@ import {
 	ButtonStyle,
 	ComponentType,
 	EmbedBuilder,
-	GuildMember,
 	NewsChannel,
 	type ChatInputCommandInteraction,
 	SlashCommandBuilder,
@@ -15,6 +14,10 @@ import {
 
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import {
+	interactionMemberDisplayName,
+	truncateButtonLabel,
+} from '../util/discordText.js';
 import { BALANCER_EMBED_BLUE } from '../util/embedColors.js';
 import {
 	balancerApiJsonAttachments,
@@ -34,26 +37,6 @@ type PlayerAddBody = {
 
 const PLAYER_CONFIRM = 'player:add:confirm';
 const PLAYER_CANCEL = 'player:add:cancel';
-
-const BUTTON_LABEL_MAX = 78;
-
-function actorName(interaction: ChatInputCommandInteraction | ButtonInteraction): string {
-	const member = interaction.member;
-	if (member instanceof GuildMember) {
-		const nick = member.nickname;
-		if (typeof nick === 'string' && nick.trim().length > 0) {
-			return nick.trim();
-		}
-	}
-	return interaction.user.displayName ?? interaction.user.username;
-}
-
-function truncateButtonLabel(text: string): string {
-	if (text.length <= BUTTON_LABEL_MAX) {
-		return text;
-	}
-	return `${text.slice(0, BUTTON_LABEL_MAX - 1)}...`;
-}
 
 function dashedUuid(uuidNoDash: string): string {
 	const compact = uuidNoDash.trim();
@@ -176,7 +159,7 @@ export const player = {
 
 		await clicked.deferUpdate();
 		const who = truncateButtonLabel(
-			`${clicked.customId === PLAYER_CANCEL ? 'Cancel' : 'Confirm'} (${actorName(clicked)})`,
+			`${clicked.customId === PLAYER_CANCEL ? 'Cancel' : 'Confirm'} (${interactionMemberDisplayName(clicked)})`,
 		);
 		const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
 			new ButtonBuilder()

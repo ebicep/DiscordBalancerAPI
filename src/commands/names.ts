@@ -8,7 +8,9 @@ import {
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
+import { MAX_MESSAGE_BLOCK_LEN } from '../discordLimits.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import { clampThreadName, takeLinesUntilBudget } from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
@@ -24,40 +26,18 @@ type NamesUpdateBody = {
 	updated?: UpdatedNameEntry[];
 };
 
-const MAX_THREAD_NAME_LEN = 100;
-const MAX_BLOCK_LEN = 1800;
-
 const THREAD_NAME = 'Updating Names';
-
-function clampThreadName(raw: string): string {
-	const t = raw.trim().replace(/\s+/g, ' ');
-	if (t.length === 0) {
-		return THREAD_NAME;
-	}
-	if (t.length <= MAX_THREAD_NAME_LEN) {
-		return t;
-	}
-	return `${t.slice(0, MAX_THREAD_NAME_LEN - 1)}…`;
-}
 
 function namesCodeBlock(updated: UpdatedNameEntry[]): string {
 	if (updated.length === 0) {
 		return '```txt\nNo names changed.\n```';
 	}
 
-	const lines: string[] = [];
-	let usedLen = 0;
-	let truncated = false;
-	for (const row of updated) {
-		const line = `${row.previous} > ${row.current}`;
-		const projectedLen = usedLen + line.length + 1;
-		if (projectedLen > MAX_BLOCK_LEN) {
-			truncated = true;
-			break;
-		}
-		lines.push(line);
-		usedLen = projectedLen;
-	}
+	const { lines, truncated } = takeLinesUntilBudget(
+		updated,
+		MAX_MESSAGE_BLOCK_LEN,
+		(row) => `${row.previous} > ${row.current}`,
+	);
 
 	const suffix = truncated ? '\n... (truncated; see response.json)' : '';
 	return `\`\`\`txt\n${lines.join('\n')}\n\`\`\`${suffix}`;
@@ -74,7 +54,7 @@ async function postNamesOutputs(
 		const channel = interaction.channel;
 		if (channel instanceof TextChannel || channel instanceof NewsChannel) {
 			const thread = await message.startThread({
-				name: clampThreadName(THREAD_NAME),
+				name: clampThreadName(THREAD_NAME, THREAD_NAME),
 				autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
 			});
 			if (files.length > 0) {

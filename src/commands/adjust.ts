@@ -8,7 +8,9 @@ import {
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
+import { MAX_MESSAGE_BLOCK_LEN } from '../discordLimits.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import { clampThreadName, takeLinesUntilBudget } from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
@@ -35,8 +37,6 @@ const SPECS: readonly string[] = [
 	'Luminary',
 ] as const;
 
-const MAX_AUTO_DAILY_BLOCK_LEN = 1800;
-
 function signed(n: number): string {
 	return n >= 0 ? `+${n}` : `${n}`;
 }
@@ -60,19 +60,6 @@ function formatAutoDailyAdjustLine(
 	newTrajectory: number,
 ): string {
 	return `${formatAdjustLine(name, label, oldWeight, newWeight)} [${oldTrajectory} > ${newTrajectory}]`;
-}
-
-const MAX_THREAD_NAME_LEN = 100;
-
-function clampThreadName(raw: string): string {
-	const t = raw.trim().replace(/\s+/g, ' ');
-	if (t.length === 0) {
-		return 'Adjust';
-	}
-	if (t.length <= MAX_THREAD_NAME_LEN) {
-		return t;
-	}
-	return `${t.slice(0, MAX_THREAD_NAME_LEN - 1)}…`;
 }
 
 /** Thread title: e.g. `sumSmash (BASE) from 270 > 270 (+0)` — no leading `Adjusted `. */
@@ -99,7 +86,7 @@ async function postRequestResponseArtifacts(
 		const ch = interaction.channel;
 		if (ch instanceof TextChannel || ch instanceof NewsChannel) {
 			const thread = await msg.startThread({
-				name: clampThreadName(threadTitle),
+				name: clampThreadName(threadTitle, 'Adjust'),
 				autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
 			});
 			await thread.send({ files });
@@ -174,26 +161,19 @@ function formatAutoDailyContent(body: AutoDailyBody): string {
 	if (entries.length === 0) {
 		return header;
 	}
-	const lines: string[] = [];
-	let truncated = false;
-	let usedLen = 0;
-	for (const e of entries) {
-		const line = formatAutoDailyAdjustLine(
-			e.name,
-			'BASE',
-			e.previousWeight,
-			e.currentWeight,
-			e.previousTrajectory,
-			e.newTrajectory,
-		);
-		const projected = usedLen + line.length + 1;
-		if (projected > MAX_AUTO_DAILY_BLOCK_LEN) {
-			truncated = true;
-			break;
-		}
-		lines.push(line);
-		usedLen = projected;
-	}
+	const { lines, truncated } = takeLinesUntilBudget(
+		entries,
+		MAX_MESSAGE_BLOCK_LEN,
+		(e) =>
+			formatAutoDailyAdjustLine(
+				e.name,
+				'BASE',
+				e.previousWeight,
+				e.currentWeight,
+				e.previousTrajectory,
+				e.newTrajectory,
+			),
+	);
 	const block = `\`\`\`\n${lines.join('\n')}\n\`\`\``;
 	const suffix = truncated ? '\n… (truncated; see response.json)' : '';
 	return `${header}\n${block}${suffix}`;

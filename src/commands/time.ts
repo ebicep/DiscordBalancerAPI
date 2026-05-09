@@ -4,19 +4,11 @@ import {
 } from 'discord.js';
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import { truncateDiscordReply } from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
-
-const MAX_REPLY_LENGTH = 1900;
-
-function truncate(content: string): string {
-	if (content.length <= MAX_REPLY_LENGTH) {
-		return content;
-	}
-	return `${content.slice(0, MAX_REPLY_LENGTH)}…\n_(truncated)_`;
-}
 
 type LatestSeasonBody = {
 	season?: number;
@@ -35,7 +27,7 @@ function seasonBodyFields(body: LatestSeasonBody): { season: number; ts: string 
 }
 
 function responseJsonBlock(body: unknown): string {
-	return truncate(['```json', JSON.stringify(body, null, 2), '```'].join('\n'));
+	return truncateDiscordReply(['```json', JSON.stringify(body, null, 2), '```'].join('\n'));
 }
 
 const fileOpts = (files: ReturnType<typeof balancerApiJsonAttachments>) =>

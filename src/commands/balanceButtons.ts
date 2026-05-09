@@ -3,8 +3,12 @@ import {
 	ButtonBuilder,
 	ButtonStyle,
 	type ButtonInteraction,
-	GuildMember,
 } from 'discord.js';
+
+import {
+	interactionMemberDisplayName,
+	truncateButtonLabel,
+} from '../util/discordText.js';
 
 export const EXPBAL_CONFIRM_PREFIX = 'expbal:confirm:' as const;
 export const EXPBAL_REBAL = 'expbal:rebal' as const;
@@ -15,24 +19,9 @@ const EXPBAL_NOOP_POSTED = 'expbal:noop:posted' as const;
 const EXPBAL_NOOP_REBAL = 'expbal:noop:rebal' as const;
 const EXPBAL_NOOP_CANCEL = 'expbal:noop:cancel' as const;
 
-const BUTTON_LABEL_MAX = 78;
-
-function truncateForButtonLabel(text: string): string {
-	if (text.length <= BUTTON_LABEL_MAX) {
-		return text;
-	}
-	return `${text.slice(0, BUTTON_LABEL_MAX - 1)}…`;
-}
-
 /** Guild nickname if set, otherwise Discord display name / username. */
 export function balanceActorDisplayName(interaction: ButtonInteraction): string {
-	if (interaction.member instanceof GuildMember) {
-		const nick = interaction.member.nickname;
-		if (typeof nick === 'string' && nick.trim().length > 0) {
-			return nick.trim();
-		}
-	}
-	return interaction.user.displayName ?? interaction.user.username;
+	return interactionMemberDisplayName(interaction);
 }
 
 export function isExperimentalBalanceButton(customId: string): boolean {
@@ -67,7 +56,7 @@ export function buildPostedBalanceRow(
 	return new ActionRowBuilder<ButtonBuilder>().addComponents(
 		new ButtonBuilder()
 			.setCustomId(EXPBAL_NOOP_POSTED)
-			.setLabel(truncateForButtonLabel(`Post (${actor})`))
+			.setLabel(truncateButtonLabel(`Post (${actor})`))
 			.setStyle(ButtonStyle.Success)
 			.setDisabled(true),
 	);
@@ -80,7 +69,7 @@ export function buildRebalConsumedRow(
 	return new ActionRowBuilder<ButtonBuilder>().addComponents(
 		new ButtonBuilder()
 			.setCustomId(EXPBAL_NOOP_REBAL)
-			.setLabel(truncateForButtonLabel(`Rebal (${actor})`))
+			.setLabel(truncateButtonLabel(`Rebal (${actor})`))
 			.setStyle(ButtonStyle.Danger)
 			.setDisabled(true),
 	);
@@ -92,7 +81,7 @@ export function buildCancelledBalanceRow(
 	return new ActionRowBuilder<ButtonBuilder>().addComponents(
 		new ButtonBuilder()
 			.setCustomId(EXPBAL_NOOP_CANCEL)
-			.setLabel(truncateForButtonLabel(`Cancelled (${actor})`))
+			.setLabel(truncateButtonLabel(`Cancelled (${actor})`))
 			.setStyle(ButtonStyle.Secondary)
 			.setDisabled(true),
 	);
