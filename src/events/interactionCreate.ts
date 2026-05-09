@@ -2,7 +2,6 @@ import {
 	ApplicationCommandOptionType,
 	Events,
 	GuildMember,
-	MessageFlags,
 	type ChatInputCommandInteraction,
 	type Client,
 	type CommandInteractionOption,
@@ -13,6 +12,30 @@ import { handleBalanceButton } from '../commands/balanceButtonHandler.js';
 import { isExperimentalBalanceButton } from '../commands/balanceButtons.js';
 import { commands, type Command } from '../commands/registry.js';
 import { GENERIC_COMMAND_FAILURE } from '../util/discordSafeErrors.js';
+
+async function notifyInteractionFailure(interaction: Interaction): Promise<void> {
+	if (!interaction.isRepliable()) {
+		return;
+	}
+	const content = GENERIC_COMMAND_FAILURE;
+	try {
+		if (interaction.isChatInputCommand()) {
+			if (interaction.deferred) {
+				await interaction.editReply({ content });
+			} else if (interaction.replied) {
+				await interaction.followUp({ content });
+			} else {
+				await interaction.reply({ content });
+			}
+		} else if (interaction.deferred || interaction.replied) {
+			await interaction.followUp({ content });
+		} else {
+			await interaction.reply({ content });
+		}
+	} catch (replyErr) {
+		console.error(replyErr);
+	}
+}
 
 function commandMap(commandsList: Command[]): Map<string, Command> {
 	return new Map(commandsList.map((c) => [c.data.name, c]));
@@ -80,21 +103,7 @@ export async function onInteractionCreate(
 			await handleBalanceButton(interaction);
 		} catch (err) {
 			console.error(err);
-			try {
-				if (interaction.deferred || interaction.replied) {
-					await interaction.followUp({
-						content: GENERIC_COMMAND_FAILURE,
-						flags: MessageFlags.Ephemeral,
-					});
-				} else {
-					await interaction.reply({
-						content: GENERIC_COMMAND_FAILURE,
-						flags: MessageFlags.Ephemeral,
-					});
-				}
-			} catch (replyErr) {
-				console.error(replyErr);
-			}
+			await notifyInteractionFailure(interaction);
 		}
 		return;
 	}
@@ -114,29 +123,15 @@ export async function onInteractionCreate(
 		await command.execute(interaction);
 	} catch (err) {
 		console.error(err);
-		const content = GENERIC_COMMAND_FAILURE;
-		try {
-			if (interaction.deferred) {
-				await interaction.editReply({ content });
-			} else if (interaction.replied) {
-				await interaction.followUp({
-					content,
-					flags: MessageFlags.Ephemeral,
-				});
-			} else {
-				await interaction.reply({
-					content,
-					flags: MessageFlags.Ephemeral,
-				});
-			}
-		} catch (replyErr) {
-			console.error(replyErr);
-		}
+		await notifyInteractionFailure(interaction);
 	}
 }
 
 export function registerInteractionCreateHandler(client: Client): void {
 	client.on(Events.InteractionCreate, (i) => {
-		void onInteractionCreate(i);
+		void onInteractionCreate(i).catch(async (err) => {
+			console.error('InteractionCreate handler error:', err);
+			await notifyInteractionFailure(i);
+		});
 	});
 }
