@@ -39,7 +39,7 @@ export function parsePlayersString(raw: string): string[] {
 		.filter((x) => x.length > 0);
 }
 
-export const balance = {
+export const experimental = {
 	data: new SlashCommandBuilder()
 		.setName('experimental')
 		.setDescription('Experimental balance API (run, confirm, input, …)')

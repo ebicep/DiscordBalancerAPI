@@ -1,6 +1,6 @@
 import type {ChatInputCommandInteraction, SlashCommandBuilder, SlashCommandSubcommandsOnlyBuilder} from 'discord.js';
 import { adjust } from './adjust.js';
-import { balance } from './balance.js';
+import { experimental } from './experimental.js';
 import { names } from './names.js';
 import { ping } from './ping.js';
 import { player } from './player.js';
@@ -13,4 +13,4 @@ export type Command = {
 	execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
 };
 
-export const commands: Command[] = [adjust, balance, names, ping, player, settings, test, time];
+export const commands: Command[] = [adjust, experimental, names, ping, player, settings, test, time];
