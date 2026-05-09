@@ -25,4 +25,4 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ebicep/discord_balance_api_bot:latest
+          tags: ebicep/discord_balancer_api_bot:latest
