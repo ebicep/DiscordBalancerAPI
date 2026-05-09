@@ -1,5 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 
+import { BALANCER_EMBED_BLUE } from './embedColors.js';
+
 const SPEC_SORT_ORDER: readonly string[] = [
 	'Conjurer',
 	'Pyromancer',
@@ -20,9 +22,6 @@ const SPEC_SORT_ORDER: readonly string[] = [
 	'Earthwarden',
 	'Apothecary',
 ] as const;
-
-/** Default embed chrome when there are no teams. */
-const DEFAULT_EMBED_COLOR = 2123412;
 
 type TeamStyle = {
 	/** Shown in field titles, e.g. "Blue" → "**__Blue Team__** …" */
@@ -154,7 +153,7 @@ export function experimentalBalanceEmbeds(
 			.setDescription(
 				`balance_id: \`${data.balance_id}\`\n_No teams in response._`,
 			)
-			.setColor(DEFAULT_EMBED_COLOR)
+			.setColor(BALANCER_EMBED_BLUE)
 			.setFooter({ text: footerPrimary });
 		return [e];
 	}
