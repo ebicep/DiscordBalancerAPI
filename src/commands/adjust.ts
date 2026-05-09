@@ -140,6 +140,8 @@ type BaseAdjustBody = {
 	name: string;
 	previousWeight: number;
 	newWeight: number;
+	previousTrajectory: number;
+	newTrajectory: number;
 };
 
 type SpecAdjustBody = {
@@ -323,22 +325,24 @@ export const adjust = {
 			}
 			const parsed = parseJsonBody(rawBody) as BaseAdjustBody;
 			await interaction.editReply({
-				content: formatAdjustLine(
+				content: formatAutoDailyAdjustLine(
 					parsed.name,
 					'BASE',
 					parsed.previousWeight,
 					parsed.newWeight,
+					parsed.previousTrajectory,
+					parsed.newTrajectory,
 				),
 			});
 			await postRequestResponseArtifacts(
 				interaction,
 				files,
-				formatAdjustThreadTitle(
+				`${formatAdjustThreadTitle(
 					parsed.name,
 					'BASE',
 					parsed.previousWeight,
 					parsed.newWeight,
-				),
+				)} [${parsed.previousTrajectory} > ${parsed.newTrajectory}]`,
 			);
 			return;
 		}
