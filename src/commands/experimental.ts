@@ -1,4 +1,5 @@
 import {
+	type AttachmentBuilder,
 	type ChatInputCommandInteraction,
 	type GuildTextBasedChannel,
 	MessageFlags,
@@ -22,8 +23,36 @@ import {
 import { rememberBalanceRun } from '../util/balanceRunCache.js';
 import { buildBalanceButtonRow } from './balanceButtons.js';
 
-const fileOpts = (files: ReturnType<typeof balancerApiJsonAttachments>) =>
+const fileOpts = (files: AttachmentBuilder[]) =>
 	files.length > 0 ? { files } : {};
+
+/** On failure: editReply with error + attachments. On success: editReply with JSON fence (+ optional prefix). Returns whether response was OK. */
+async function replyWithBalancerJson(
+	interaction: ChatInputCommandInteraction,
+	res: Response,
+	requestBody: string | undefined,
+	options?: { successPrefix?: string },
+): Promise<boolean> {
+	const rawBody = await res.text();
+	const files = balancerApiJsonAttachments(requestBody, rawBody);
+	if (!res.ok) {
+		await interaction.editReply({
+			content: formatFailedApiBody(res.status, rawBody),
+			...fileOpts(files),
+		});
+		return false;
+	}
+	const pretty = parseJsonBody(rawBody);
+	const fence = `\`\`\`json\n${JSON.stringify(pretty, null, 2)}\n\`\`\``;
+	const prefix = options?.successPrefix;
+	const content =
+		prefix !== undefined && prefix.length > 0 ? `${prefix}\n${fence}` : fence;
+	await interaction.editReply({
+		content,
+		...fileOpts(files),
+	});
+	return true;
+}
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -114,6 +143,17 @@ export const experimental = {
 			sub
 				.setName('clear-input')
 				.setDescription('Clear stored input (POST …/clear-input)')
+				.addStringOption((o) =>
+					o
+						.setName('balance_id')
+						.setDescription('Balance UUID')
+						.setRequired(true),
+				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('generate-input')
+				.setDescription('Mock input JSON for a balance (GET …/generate-input)')
 				.addStringOption((o) =>
 					o
 						.setName('balance_id')
@@ -245,26 +285,31 @@ export const experimental = {
 			const { response: res, requestBody } = await balancerFetch(path, {
 				method: 'POST',
 			});
-			const rawBody = await res.text();
-			const files = balancerApiJsonAttachments(requestBody, rawBody);
-			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-					...fileOpts(files),
-				});
-				return;
-			}
-			const pretty = parseJsonBody(rawBody);
 			const summary =
 				sub === 'confirm'
 					? 'Confirmed.'
 					: sub === 'unconfirm'
 						? 'Unconfirmed.'
 						: 'Input cleared.';
-			await interaction.editReply({
-				content: `${summary}\n\`\`\`json\n${JSON.stringify(pretty, null, 2)}\n\`\`\``,
-				...fileOpts(files),
+			await replyWithBalancerJson(interaction, res, requestBody, {
+				successPrefix: summary,
 			});
+			return;
+		}
+
+		if (sub === 'generate-input') {
+			const balanceId = interaction.options.getString('balance_id', true).trim();
+			if (!isUuid(balanceId)) {
+				await interaction.editReply({
+					content: '`balance_id` must be a valid UUID.',
+				});
+				return;
+			}
+			const { response: res, requestBody } = await balancerFetch(
+				`/experimental/balance/${balanceId}/generate-input`,
+				{ method: 'GET' },
+			);
+			await replyWithBalancerJson(interaction, res, requestBody);
 			return;
 		}
 
@@ -295,20 +340,7 @@ export const experimental = {
 					body: serialized,
 				},
 			);
-			const rawBody = await res.text();
-			const files = balancerApiJsonAttachments(requestBody, rawBody);
-			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-					...fileOpts(files),
-				});
-				return;
-			}
-			const pretty = parseJsonBody(rawBody);
-			await interaction.editReply({
-				content: `\`\`\`json\n${JSON.stringify(pretty, null, 2)}\n\`\`\``,
-				...fileOpts(files),
-			});
+			await replyWithBalancerJson(interaction, res, requestBody);
 			return;
 		}
 
@@ -346,20 +378,7 @@ export const experimental = {
 				`/experimental/balance/${balanceId}/uninput`,
 				init,
 			);
-			const rawBody = await res.text();
-			const files = balancerApiJsonAttachments(requestBody, rawBody);
-			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-					...fileOpts(files),
-				});
-				return;
-			}
-			const pretty = parseJsonBody(rawBody);
-			await interaction.editReply({
-				content: `\`\`\`json\n${JSON.stringify(pretty, null, 2)}\n\`\`\``,
-				...fileOpts(files),
-			});
+			await replyWithBalancerJson(interaction, res, requestBody);
 		}
 	},
 };
