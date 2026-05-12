@@ -1,4 +1,5 @@
 import { getEnv } from '../config/env.js';
+import { extractErrnoCode } from '../util/apiErrorMessage.js';
 
 export type ApiFetchInit = Omit<RequestInit, 'headers'> & {
 	headers?: Record<string, string>;
@@ -28,20 +29,7 @@ export async function balancerFetch(
 		};
 	} catch (err) {
 		console.error('balancerFetch failed', { url, err });
-		let code: string | undefined;
-		let chain: unknown = err;
-		while (chain instanceof Error) {
-			const c = (chain as NodeJS.ErrnoException).code;
-			if (typeof c === 'string' && c.length > 0) {
-				code = c;
-				break;
-			}
-			const next = (chain as Error & { cause?: unknown }).cause;
-			if (next === undefined) {
-				break;
-			}
-			chain = next;
-		}
+		const code = extractErrnoCode(err);
 		const suffix = code !== undefined ? ` (${code})` : '';
 		throw new Error(`Could not reach Balancer API${suffix}.`, { cause: err });
 	}

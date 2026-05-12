@@ -1,6 +1,23 @@
 import { httpFailureLine } from './discordSafeErrors.js';
 import { truncatePlainToMax } from './discordText.js';
 
+/** Walks `Error` / `Error.cause` chain and returns the first `NodeJS.ErrnoException.code`, if any. */
+export function extractErrnoCode(err: unknown): string | undefined {
+	let chain: unknown = err;
+	while (chain instanceof Error) {
+		const code = (chain as NodeJS.ErrnoException).code;
+		if (typeof code === 'string' && code.length > 0) {
+			return code;
+		}
+		const next = (chain as Error & { cause?: unknown }).cause;
+		if (next === undefined) {
+			break;
+		}
+		chain = next;
+	}
+	return undefined;
+}
+
 function pickProblemJsonMessage(parsed: Record<string, unknown>): string | null {
 	const title =
 		typeof parsed.title === 'string' ? parsed.title.trim() : '';
