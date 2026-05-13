@@ -25,9 +25,6 @@ function pickProblemJsonMessage(parsed: Record<string, unknown>): string | null 
 		typeof parsed.detail === 'string' ? parsed.detail.trim() : '';
 	const message =
 		typeof parsed.message === 'string' ? parsed.message.trim() : '';
-	if (detail.length > 0 && title.length > 0) {
-		return `${title}\n${detail}`;
-	}
 	if (detail.length > 0) {
 		return detail;
 	}
