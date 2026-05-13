@@ -1,6 +1,5 @@
 import { type ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
-import { getEnv } from '../config/env.js';
-import { extractErrnoCode } from '../util/apiErrorMessage.js';
+import { balancerFetch } from '../api/balancerApi.js';
 import { balancerApiJsonAttachments } from '../util/jsonDiscordAttachment.js';
 import { runInReplyThread, sendBalancerFilesToThread } from '../util/replyThread.js';
 
@@ -60,18 +59,14 @@ export const apiHealth = {
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
 
-		const url = `${getEnv().balancerApiBaseUrl}/health`;
 		let response: Response;
 		try {
-			response = await fetch(url, {
-				method: 'GET',
-				headers: { Accept: 'application/json' },
-			});
+			const result = await balancerFetch('/health');
+			response = result.response;
 		} catch (err) {
-			console.error('api-health failed', { url, err });
-			const code = extractErrnoCode(err);
-			const suffix = code !== undefined ? ` (${code})` : '';
-			await interaction.editReply(`Could not reach Balancer API${suffix}.`);
+			console.error('api-health failed', err);
+			const message = err instanceof Error ? err.message : 'Could not reach Balancer API.';
+			await interaction.editReply(message);
 			return;
 		}
 
