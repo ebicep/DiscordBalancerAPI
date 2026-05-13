@@ -64,13 +64,13 @@ async function replyWithBalancerJson(
 async function dispatchExperimentalRunFailure(
 	interaction: ChatInputCommandInteraction,
 	params: {
-		threadTitle: string;
-		threadTitleWhenEmpty: string;
 		errorContent: string;
 		files: AttachmentBuilder[];
 	},
 ): Promise<void> {
-	const { threadTitle, threadTitleWhenEmpty, errorContent, files } = params;
+	const threadTitle = 'Error';
+	const threadTitleWhenEmpty = 'Error';
+	const { errorContent, files } = params;
 	const fallbackPayload = {
 		content: errorContent,
 		...fileOpts(files),
@@ -232,8 +232,6 @@ export const experimental = {
 				return;
 			}
 			const body = JSON.stringify({ players });
-			const errThreadTitle = 'experimental-run-error';
-			const errThreadTitleEmpty = 'run-error';
 
 			let res: Response;
 			let requestBody: string | undefined;
@@ -250,8 +248,6 @@ export const experimental = {
 					err instanceof Error ? err.message : 'Could not reach Balancer API.';
 				const synthetic = JSON.stringify({ error: message }, null, 2);
 				await dispatchExperimentalRunFailure(interaction, {
-					threadTitle: errThreadTitle,
-					threadTitleWhenEmpty: errThreadTitleEmpty,
 					errorContent: message,
 					files: balancerApiJsonAttachments(body, synthetic),
 				});
@@ -262,8 +258,6 @@ export const experimental = {
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
 				await dispatchExperimentalRunFailure(interaction, {
-					threadTitle: errThreadTitle,
-					threadTitleWhenEmpty: errThreadTitleEmpty,
 					errorContent: formatFailedApiBody(res.status, rawBody),
 					files,
 				});
@@ -273,10 +267,7 @@ export const experimental = {
 			const parsed = parseExperimentalBalanceResponse(parsedUnknown);
 			if (parsed === null) {
 				await dispatchExperimentalRunFailure(interaction, {
-					threadTitle: errThreadTitle,
-					threadTitleWhenEmpty: errThreadTitleEmpty,
-					errorContent:
-						'Balance API returned an unexpected JSON shape.',
+					errorContent: 'Balance API returned an unexpected JSON shape.',
 					files,
 				});
 				return;
@@ -285,8 +276,6 @@ export const experimental = {
 			const firstEmbed = embeds[0];
 			if (firstEmbed === undefined) {
 				await dispatchExperimentalRunFailure(interaction, {
-					threadTitle: errThreadTitle,
-					threadTitleWhenEmpty: errThreadTitleEmpty,
 					errorContent: 'Could not build balance embed.',
 					files,
 				});
