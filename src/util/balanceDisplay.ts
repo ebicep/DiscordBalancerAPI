@@ -139,6 +139,49 @@ function codeBlock(inner: string): string {
 	return trimmed.length > 0 ? `\`\`\`\n${trimmed}\n\`\`\`` : '```\n_(empty)_\n```';
 }
 
+function balanceIdCodeBlockField(balanceId: string): {
+	name: string;
+	value: string;
+	inline: boolean;
+} {
+	return {
+		name: '',
+		value: codeBlock(balanceId),
+		inline: false,
+	};
+}
+
+function codeBlockInnerText(value: string): string | null {
+	const v = value.trim();
+	if (!v.startsWith('```')) {
+		return null;
+	}
+	const end = v.lastIndexOf('```');
+	if (end <= 2) {
+		return null;
+	}
+	let inner = v.slice(3, end).replace(/^\w*\r?\n?/, '').trimEnd();
+	return inner.trim();
+}
+
+export function resultEmbedMatchesBalanceId(
+	embed: {
+		description?: string | null;
+		fields?: readonly { name: string; value: string }[] | null;
+	},
+	balanceId: string,
+): boolean {
+	const want = balanceId.toLowerCase();
+	for (const f of embed.fields ?? []) {
+		const raw = f.value ?? '';
+		const fromCode = codeBlockInnerText(raw);
+		if (fromCode !== null && fromCode.toLowerCase() === want) {
+			return true;
+		}
+	}
+	return false;
+}
+
 function formatBalancePrimaryFooter(meta: ExperimentalBalanceMetaJson): string {
 	const stepSumMs = meta.steps.reduce((a, s) => a + s.durationMs, 0);
 	const balanceS = (stepSumMs > 0 ? stepSumMs : meta.durationMs) / 1000;
@@ -210,6 +253,7 @@ export function experimentalBalanceEmbeds(
 			inline: true,
 		};
 	});
+	specFields.push(balanceIdCodeBlockField(data.balance_id));
 	if (typeof threadUrl === 'string' && threadUrl.length > 0) {
 		specFields.push({
 			name: '',

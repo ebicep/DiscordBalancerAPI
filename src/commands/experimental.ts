@@ -11,6 +11,7 @@ import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import {
 	balancerApiJsonAttachments,
+	jsonDiscordAttachment,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
 import {
@@ -20,11 +21,15 @@ import {
 } from '../util/balanceDisplay.js';
 import { rememberBalanceRun } from '../util/balanceRunCache.js';
 import {
+	applyResultEmbedAfterInput,
+} from '../util/balanceResultChannelEmbed.js';
+import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
 	sendBalancerFilesToThread,
 } from '../util/replyThread.js';
 import { buildBalanceButtonRow } from './balanceButtons.js';
+import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
 
 const fileOpts = (files: AttachmentBuilder[]) =>
 	files.length > 0 ? { files } : {};
@@ -382,11 +387,15 @@ export const experimental = {
 				});
 				return;
 			}
-			const { response: res, requestBody } = await balancerFetch(
+			const { response: res } = await balancerFetch(
 				`/experimental/balance/${balanceId}/generate-input`,
 				{ method: 'GET' },
 			);
-			await replyWithBalancerJson(interaction, res, requestBody);
+			const rawBody = await res.text();
+			const pretty = parseJsonBody(rawBody);
+			await interaction.editReply({
+				files: [jsonDiscordAttachment('response.json', pretty)],
+			});
 			return;
 		}
 
@@ -417,7 +426,22 @@ export const experimental = {
 					body: serialized,
 				},
 			);
-			await replyWithBalancerJson(interaction, res, requestBody);
+			const rawBody = await res.text();
+			await interaction.editReply({
+				files: balancerApiJsonAttachments(requestBody, rawBody),
+			});
+			if (res.ok) {
+				try {
+					await applyResultEmbedAfterInput(
+						interaction.client,
+						BALANCE_POST_RESULT_CHANNEL_ID,
+						balanceId,
+						parsedBody,
+					);
+				} catch (err) {
+					console.error('balance result embed update failed', err);
+				}
+			}
 			return;
 		}
 
@@ -455,7 +479,10 @@ export const experimental = {
 				`/experimental/balance/${balanceId}/uninput`,
 				init,
 			);
-			await replyWithBalancerJson(interaction, res, requestBody);
+			const rawBody = await res.text();
+			await interaction.editReply({
+				files: balancerApiJsonAttachments(requestBody, rawBody),
+			});
 		}
 	},
 };
