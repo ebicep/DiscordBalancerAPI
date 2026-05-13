@@ -1,20 +1,14 @@
-import {
-	type ChatInputCommandInteraction,
-	MessageFlags,
-	NewsChannel,
-	SlashCommandBuilder,
-	TextChannel,
-	ThreadAutoArchiveDuration,
-} from 'discord.js';
+import { type ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
 import { MAX_MESSAGE_BLOCK_LEN } from '../discordLimits.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
-import { clampThreadName, takeLinesUntilBudget } from '../util/discordText.js';
+import { takeLinesUntilBudget } from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
+import { runInReplyThread } from '../util/replyThread.js';
 
 const SPECS: readonly string[] = [
 	'Pyromancer',
@@ -81,20 +75,10 @@ async function postRequestResponseArtifacts(
 	if (files.length === 0) {
 		return;
 	}
-	try {
-		const msg = await interaction.fetchReply();
-		const ch = interaction.channel;
-		if (ch instanceof TextChannel || ch instanceof NewsChannel) {
-			const thread = await msg.startThread({
-				name: clampThreadName(threadTitle, 'Adjust'),
-				autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-			});
-			await thread.send({ files });
-			return;
-		}
+	const onNoThreadParent = async (): Promise<void> => {
 		await interaction.followUp({ files });
-	} catch (err) {
-		console.error('adjust: failed to post request/response artifacts', err);
+	};
+	const onThreadOpenError = async (): Promise<void> => {
 		try {
 			await interaction.followUp({
 				content:
@@ -105,7 +89,18 @@ async function postRequestResponseArtifacts(
 		} catch (followErr) {
 			console.error('adjust: followUp with artifacts failed', followErr);
 		}
-	}
+	};
+	await runInReplyThread({
+		interaction,
+		threadTitle,
+		threadTitleWhenEmpty: 'Adjust',
+		logLabel: 'adjust: failed to post request/response artifacts',
+		onNoThreadParent,
+		onThreadOpenError,
+		inThread: async (thread) => {
+			await thread.send({ files });
+		},
+	});
 }
 
 type AutoDailyEntry = {

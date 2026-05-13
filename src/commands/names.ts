@@ -1,20 +1,14 @@
-import {
-	type ChatInputCommandInteraction,
-	MessageFlags,
-	NewsChannel,
-	SlashCommandBuilder,
-	TextChannel,
-	ThreadAutoArchiveDuration,
-} from 'discord.js';
+import { type ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
 import { MAX_MESSAGE_BLOCK_LEN } from '../discordLimits.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
-import { clampThreadName, takeLinesUntilBudget } from '../util/discordText.js';
+import { takeLinesUntilBudget } from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
+import { runInReplyThread, sendBalancerFilesToThread } from '../util/replyThread.js';
 
 type UpdatedNameEntry = {
 	uuid: string;
@@ -49,43 +43,7 @@ async function postNamesOutputs(
 	detailContent: string,
 	options?: { summaryLine?: string },
 ): Promise<void> {
-	try {
-		const message = await interaction.fetchReply();
-		const channel = interaction.channel;
-		if (channel instanceof TextChannel || channel instanceof NewsChannel) {
-			const thread = await message.startThread({
-				name: clampThreadName(THREAD_NAME, THREAD_NAME),
-				autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-			});
-			if (files.length > 0) {
-				await thread.send({ files });
-			}
-			await thread.send({ content: detailContent });
-			if (options?.summaryLine !== undefined) {
-				await thread.send({ content: options.summaryLine });
-			}
-			return;
-		}
-
-		const fileOpts = files.length > 0 ? { files } : {};
-		await interaction.followUp({
-			content:
-				'Could not open a thread for request/response files. Posting them here.',
-			flags: MessageFlags.Ephemeral,
-			...fileOpts,
-		});
-		await interaction.followUp({
-			content: detailContent,
-			flags: MessageFlags.Ephemeral,
-		});
-		if (options?.summaryLine !== undefined) {
-			await interaction.followUp({
-				content: options.summaryLine,
-				flags: MessageFlags.Ephemeral,
-			});
-		}
-	} catch (err) {
-		console.error('names: failed to post outputs', err);
+	const ephemeralFallback = async (): Promise<void> => {
 		const fileOpts = files.length > 0 ? { files } : {};
 		try {
 			await interaction.followUp({
@@ -107,7 +65,21 @@ async function postNamesOutputs(
 		} catch (followErr) {
 			console.error('names: fallback followUp failed', followErr);
 		}
-	}
+	};
+	await runInReplyThread({
+		interaction,
+		threadTitle: THREAD_NAME,
+		threadTitleWhenEmpty: THREAD_NAME,
+		logLabel: 'names: failed to post outputs',
+		onNoThreadParent: ephemeralFallback,
+		inThread: async (thread) => {
+			await sendBalancerFilesToThread(thread, files);
+			await thread.send({ content: detailContent });
+			if (options?.summaryLine !== undefined) {
+				await thread.send({ content: options.summaryLine });
+			}
+		},
+	});
 }
 
 export const names = {

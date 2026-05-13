@@ -5,11 +5,8 @@ import {
 	ButtonStyle,
 	ComponentType,
 	EmbedBuilder,
-	NewsChannel,
 	type ChatInputCommandInteraction,
 	SlashCommandBuilder,
-	TextChannel,
-	ThreadAutoArchiveDuration,
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
@@ -23,6 +20,7 @@ import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
+import { isPublicThreadParentChannel, runInReplyThread } from '../util/replyThread.js';
 
 type MojangLookupResponse = {
 	id?: string;
@@ -178,56 +176,64 @@ export const player = {
 			return;
 		}
 
-		const ch = interaction.channel;
-		if (!(ch instanceof TextChannel || ch instanceof NewsChannel)) {
+		const cannotThreadEmbed = new EmbedBuilder()
+			.setTitle('Cannot create thread in this channel.')
+			.setColor(BALANCER_EMBED_BLUE);
+
+		if (!isPublicThreadParentChannel(interaction.channel)) {
 			await interaction.followUp({
-				embeds: [
-					new EmbedBuilder()
-						.setTitle('Cannot create thread in this channel.')
-						.setColor(BALANCER_EMBED_BLUE),
-				],
+				embeds: [cannotThreadEmbed],
 			});
 			return;
 		}
 
-		const thread = await reply.startThread({
-			name: `Add Player ${mojang.name}`,
-			autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-		});
+		await runInReplyThread({
+			interaction,
+			starterMessage: reply,
+			threadTitle: `Add Player ${mojang.name}`,
+			threadTitleWhenEmpty: 'Add Player',
+			logLabel: 'player add: failed to create thread or post result',
+			onNoThreadParent: async () => {
+				await interaction.followUp({
+					embeds: [cannotThreadEmbed],
+				});
+			},
+			inThread: async (thread) => {
+				const body = JSON.stringify({ uuid: mojang.uuid, baseWeight });
+				const { response: res, requestBody } = await balancerFetch('/player/add', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body,
+				});
+				const rawBody = await res.text();
+				const files = balancerApiJsonAttachments(requestBody, rawBody);
+				const fileOpts = files.length > 0 ? { files } : {};
 
-		const body = JSON.stringify({ uuid: mojang.uuid, baseWeight });
-		const { response: res, requestBody } = await balancerFetch('/player/add', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body,
-		});
-		const rawBody = await res.text();
-		const files = balancerApiJsonAttachments(requestBody, rawBody);
-		const fileOpts = files.length > 0 ? { files } : {};
+				if (!res.ok) {
+					if (res.status === 409) {
+						await thread.send({
+							embeds: [
+								new EmbedBuilder()
+									.setTitle('Player already exists')
+									.setColor(BALANCER_EMBED_BLUE),
+							],
+							...fileOpts,
+						});
+						return;
+					}
+					await thread.send({
+						content: formatFailedApiBody(res.status, rawBody),
+						...fileOpts,
+					});
+					return;
+				}
 
-		if (!res.ok) {
-			if (res.status === 409) {
+				const parsed = parseJsonBody(rawBody) as PlayerAddBody;
 				await thread.send({
-					embeds: [
-						new EmbedBuilder()
-							.setTitle('Player already exists')
-							.setColor(BALANCER_EMBED_BLUE),
-					],
+					embeds: [tablesAddedEmbed(parsed.tablesAdded)],
 					...fileOpts,
 				});
-				return;
-			}
-			await thread.send({
-				content: formatFailedApiBody(res.status, rawBody),
-				...fileOpts,
-			});
-			return;
-		}
-
-		const parsed = parseJsonBody(rawBody) as PlayerAddBody;
-		await thread.send({
-			embeds: [tablesAddedEmbed(parsed.tablesAdded)],
-			...fileOpts,
+			},
 		});
 	},
 };

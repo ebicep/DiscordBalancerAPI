@@ -3,10 +3,7 @@ import {
 	type ChatInputCommandInteraction,
 	type GuildTextBasedChannel,
 	MessageFlags,
-	NewsChannel,
 	SlashCommandBuilder,
-	TextChannel,
-	ThreadAutoArchiveDuration,
 	ThreadChannel,
 } from 'discord.js';
 
@@ -21,6 +18,11 @@ import {
 	parseExperimentalBalanceResponse,
 } from '../util/balanceDisplay.js';
 import { rememberBalanceRun } from '../util/balanceRunCache.js';
+import {
+	isPublicThreadParentChannel,
+	runInReplyThread,
+	sendBalancerFilesToThread,
+} from '../util/replyThread.js';
 import { buildBalanceButtonRow } from './balanceButtons.js';
 
 const fileOpts = (files: AttachmentBuilder[]) =>
@@ -52,6 +54,61 @@ async function replyWithBalancerJson(
 		...fileOpts(files),
 	});
 	return true;
+}
+
+/**
+ * For `/experimental run` failures: full `errorContent` on the slash reply; JSON
+ * attachments only in a new thread on that reply when the channel supports it.
+ * Falls back to a single reply with error + files when threading is unavailable.
+ */
+async function dispatchExperimentalRunFailure(
+	interaction: ChatInputCommandInteraction,
+	params: {
+		threadTitle: string;
+		threadTitleWhenEmpty: string;
+		errorContent: string;
+		files: AttachmentBuilder[];
+	},
+): Promise<void> {
+	const { threadTitle, threadTitleWhenEmpty, errorContent, files } = params;
+	const fallbackPayload = {
+		content: errorContent,
+		...fileOpts(files),
+	};
+	const ch = interaction.channel;
+
+	if (ch instanceof ThreadChannel) {
+		await interaction.editReply({ content: errorContent });
+		await sendBalancerFilesToThread(ch, files);
+		return;
+	}
+
+	if (isPublicThreadParentChannel(ch)) {
+		await interaction.editReply({ content: errorContent });
+		if (files.length === 0) {
+			return;
+		}
+		const starterMsg = await interaction.fetchReply();
+		await runInReplyThread({
+			interaction,
+			starterMessage: starterMsg,
+			threadTitle,
+			threadTitleWhenEmpty,
+			logLabel: 'experimental run (error): failed to create or post in thread',
+			onNoThreadParent: async () => {
+				await interaction.editReply(fallbackPayload);
+			},
+			onThreadOpenError: async () => {
+				await interaction.editReply(fallbackPayload);
+			},
+			inThread: async (thread) => {
+				await sendBalancerFilesToThread(thread, files);
+			},
+		});
+		return;
+	}
+
+	await interaction.editReply(fallbackPayload);
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -175,38 +232,63 @@ export const experimental = {
 				return;
 			}
 			const body = JSON.stringify({ players });
-			const { response: res, requestBody } = await balancerFetch(
-				'/experimental/balance',
-				{
+			const errThreadTitle = 'experimental-run-error';
+			const errThreadTitleEmpty = 'run-error';
+
+			let res: Response;
+			let requestBody: string | undefined;
+			try {
+				const out = await balancerFetch('/experimental/balance', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body,
-				},
-			);
+				});
+				res = out.response;
+				requestBody = out.requestBody;
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : 'Could not reach Balancer API.';
+				const synthetic = JSON.stringify({ error: message }, null, 2);
+				await dispatchExperimentalRunFailure(interaction, {
+					threadTitle: errThreadTitle,
+					threadTitleWhenEmpty: errThreadTitleEmpty,
+					errorContent: message,
+					files: balancerApiJsonAttachments(body, synthetic),
+				});
+				return;
+			}
+
 			const rawBody = await res.text();
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-					...fileOpts(files),
+				await dispatchExperimentalRunFailure(interaction, {
+					threadTitle: errThreadTitle,
+					threadTitleWhenEmpty: errThreadTitleEmpty,
+					errorContent: formatFailedApiBody(res.status, rawBody),
+					files,
 				});
 				return;
 			}
 			const parsedUnknown = parseJsonBody(rawBody);
 			const parsed = parseExperimentalBalanceResponse(parsedUnknown);
 			if (parsed === null) {
-				await interaction.editReply({
-					content: 'Balance API returned an unexpected JSON shape.',
-					...fileOpts(files),
+				await dispatchExperimentalRunFailure(interaction, {
+					threadTitle: errThreadTitle,
+					threadTitleWhenEmpty: errThreadTitleEmpty,
+					errorContent:
+						'Balance API returned an unexpected JSON shape.',
+					files,
 				});
 				return;
 			}
 			const embeds = experimentalBalanceEmbeds(parsed);
 			const firstEmbed = embeds[0];
 			if (firstEmbed === undefined) {
-				await interaction.editReply({
-					content: 'Could not build balance embed.',
-					...fileOpts(files),
+				await dispatchExperimentalRunFailure(interaction, {
+					threadTitle: errThreadTitle,
+					threadTitleWhenEmpty: errThreadTitleEmpty,
+					errorContent: 'Could not build balance embed.',
+					files,
 				});
 				return;
 			}
@@ -216,7 +298,9 @@ export const experimental = {
 			});
 			const starterMsg = await interaction.fetchReply();
 
-			const postBalanceInChannel = async (target: GuildTextBasedChannel) => {
+			const postBalanceInChannel = async (
+				target: GuildTextBasedChannel | ThreadChannel,
+			) => {
 				return target.send({
 					embeds: [firstEmbed],
 					components: [buildBalanceButtonRow(parsed.balance_id)],
@@ -236,35 +320,36 @@ export const experimental = {
 				return;
 			}
 
-			if (!(ch instanceof TextChannel || ch instanceof NewsChannel)) {
-				await interaction.followUp({
-					content:
-						'Use `/experimental run` in a text or announcement channel so a thread can be created.',
-					flags: MessageFlags.Ephemeral,
-				});
-				return;
-			}
-
-			try {
-				const thread = await starterMsg.startThread({
-					name: parsed.balance_id,
-					autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-				});
-				const threadMsg = await postBalanceInChannel(thread);
-				rememberBalanceRun(
-					threadMsg.id,
-					interaction.user.id,
-					players,
-					parsed,
-				);
-			} catch (err) {
-				console.error(err);
-				await interaction.followUp({
-					content:
-						'Could not create a thread or post inside it. Check **Create Public Threads** and **Send Messages in Threads** for the bot.',
-					flags: MessageFlags.Ephemeral,
-				});
-			}
+			await runInReplyThread({
+				interaction,
+				starterMessage: starterMsg,
+				threadTitle: parsed.balance_id,
+				threadTitleWhenEmpty: parsed.balance_id,
+				logLabel: 'experimental run: failed to create or post in thread',
+				onNoThreadParent: async () => {
+					await interaction.followUp({
+						content:
+							'Use `/experimental run` in a text or announcement channel so a thread can be created.',
+						flags: MessageFlags.Ephemeral,
+					});
+				},
+				onThreadOpenError: async () => {
+					await interaction.followUp({
+						content:
+							'Could not create a thread or post inside it. Check **Create Public Threads** and **Send Messages in Threads** for the bot.',
+						flags: MessageFlags.Ephemeral,
+					});
+				},
+				inThread: async (thread) => {
+					const threadMsg = await postBalanceInChannel(thread);
+					rememberBalanceRun(
+						threadMsg.id,
+						interaction.user.id,
+						players,
+						parsed,
+					);
+				},
+			});
 			return;
 		}
 

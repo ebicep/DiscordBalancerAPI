@@ -1,15 +1,8 @@
-import {
-	type ChatInputCommandInteraction,
-	MessageFlags,
-	NewsChannel,
-	SlashCommandBuilder,
-	TextChannel,
-	ThreadAutoArchiveDuration,
-} from 'discord.js';
+import { type ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } from 'discord.js';
 import { getEnv } from '../config/env.js';
 import { extractErrnoCode } from '../util/apiErrorMessage.js';
-import { clampThreadName } from '../util/discordText.js';
 import { balancerApiJsonAttachments } from '../util/jsonDiscordAttachment.js';
+import { runInReplyThread, sendBalancerFilesToThread } from '../util/replyThread.js';
 
 type HealthBody = {
 	status?: unknown;
@@ -35,31 +28,7 @@ async function postHealthResponseThread(
 	rawBody: string,
 ): Promise<void> {
 	const files = balancerApiJsonAttachments(undefined, rawBody);
-	try {
-		const message = await interaction.fetchReply();
-		const channel = interaction.channel;
-		if (channel instanceof TextChannel || channel instanceof NewsChannel) {
-			const thread = await message.startThread({
-				name: clampThreadName(THREAD_NAME, THREAD_NAME),
-				autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
-			});
-			if (files.length > 0) {
-				await thread.send({ files });
-			} else {
-				await thread.send({ content: '_(empty response body)_' });
-			}
-			return;
-		}
-
-		const fileOpts = files.length > 0 ? { files } : {};
-		await interaction.followUp({
-			content:
-				'Could not open a thread for the health response. Posting JSON here.',
-			flags: MessageFlags.Ephemeral,
-			...fileOpts,
-		});
-	} catch (err) {
-		console.error('api-health: failed to post response thread', err);
+	const ephemeralFallback = async (): Promise<void> => {
 		const fileOpts = files.length > 0 ? { files } : {};
 		try {
 			await interaction.followUp({
@@ -71,7 +40,17 @@ async function postHealthResponseThread(
 		} catch (followErr) {
 			console.error('api-health: fallback followUp failed', followErr);
 		}
-	}
+	};
+	await runInReplyThread({
+		interaction,
+		threadTitle: THREAD_NAME,
+		threadTitleWhenEmpty: THREAD_NAME,
+		logLabel: 'api-health: failed to post response thread',
+		onNoThreadParent: ephemeralFallback,
+		inThread: async (thread) => {
+			await sendBalancerFilesToThread(thread, files, '_(empty response body)_');
+		},
+	});
 }
 
 export const apiHealth = {
