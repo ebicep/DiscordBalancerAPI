@@ -154,7 +154,7 @@ export function experimentalRepeatSpecWarningEmbed(
 		return null;
 	}
 	return new EmbedBuilder()
-		.setTitle(`Warning: ${n} players on repeat specs`)
+		.setTitle(`Warning: ${n} player(s) on repeat specs`)
 		.setColor(BALANCER_EMBED_WARNING);
 }
 
