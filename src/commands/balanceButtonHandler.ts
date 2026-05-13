@@ -13,6 +13,7 @@ import {
 } from '../util/jsonDiscordAttachment.js';
 import {
 	experimentalBalanceEmbeds,
+	experimentalRepeatSpecWarningEmbed,
 	parseExperimentalBalanceResponse,
 } from '../util/balanceDisplay.js';
 import { getBalanceRun, rememberBalanceRun } from '../util/balanceRunCache.js';
@@ -101,6 +102,7 @@ export async function handleBalanceButton(
 			return;
 		}
 		const embeds = experimentalBalanceEmbeds(parsed);
+		const warnEmbed = experimentalRepeatSpecWarningEmbed(parsed);
 		const first = embeds[0];
 		if (first === undefined) {
 			await editBalanceButtons(interaction, [
@@ -129,8 +131,9 @@ export async function handleBalanceButton(
 		}
 		let newMsg;
 		try {
+			const balanceEmbeds = warnEmbed !== null ? [first, warnEmbed] : [first];
 			newMsg = await sendTarget.send({
-				embeds: [first],
+				embeds: balanceEmbeds,
 				components: [buildBalanceButtonRow(parsed.balance_id)],
 				...fileOpts(files),
 			});

@@ -15,6 +15,7 @@ import {
 } from '../util/jsonDiscordAttachment.js';
 import {
 	experimentalBalanceEmbeds,
+	experimentalRepeatSpecWarningEmbed,
 	parseExperimentalBalanceResponse,
 } from '../util/balanceDisplay.js';
 import { rememberBalanceRun } from '../util/balanceRunCache.js';
@@ -273,6 +274,7 @@ export const experimental = {
 				return;
 			}
 			const embeds = experimentalBalanceEmbeds(parsed);
+			const warnEmbed = experimentalRepeatSpecWarningEmbed(parsed);
 			const firstEmbed = embeds[0];
 			if (firstEmbed === undefined) {
 				await dispatchExperimentalRunFailure(interaction, {
@@ -290,8 +292,9 @@ export const experimental = {
 			const postBalanceInChannel = async (
 				target: GuildTextBasedChannel | ThreadChannel,
 			) => {
+				const balanceEmbeds = warnEmbed !== null ? [firstEmbed, warnEmbed] : [firstEmbed];
 				return target.send({
-					embeds: [firstEmbed],
+					embeds: balanceEmbeds,
 					components: [buildBalanceButtonRow(parsed.balance_id)],
 					...fileOpts(files),
 				});

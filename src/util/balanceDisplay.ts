@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 
-import { BALANCER_EMBED_BLUE } from './embedColors.js';
+import { BALANCER_EMBED_BLUE, BALANCER_EMBED_WARNING } from './embedColors.js';
 
 const SPEC_SORT_ORDER: readonly string[] = [
 	'Conjurer',
@@ -66,6 +66,7 @@ export type ExperimentalBalancePlayerSpecJson = {
 	talker: number;
 	win_loss: number;
 	net_kd_per_game: number;
+	off: boolean;
 };
 
 export type ExperimentalBalanceTeamJson = {
@@ -94,6 +95,7 @@ export type ExperimentalBalanceResponseJson = {
 	balance_id: string;
 	balance: ExperimentalBalanceTeamJson[];
 	meta: ExperimentalBalanceMetaJson;
+	total_off: number;
 };
 
 function specSortKey(spec: string): number {
@@ -108,22 +110,28 @@ function formatBalanceEmbedTitle(meta: ExperimentalBalanceMetaJson): string {
 }
 
 function formatPlayerLineDetailed(p: ExperimentalBalancePlayerSpecJson): string {
-	return `${p.name} - ${p.spec}(${p.weight}:${p.win_loss})`;
+	const tail = p.off ? ' !!!' : '';
+	return `${p.name} - ${p.spec}(${p.weight}:${p.win_loss})${tail}`;
 }
 
 function formatPlayerLineShort(p: ExperimentalBalancePlayerSpecJson): string {
-	return `${p.name} - ${p.spec}`;
+	const tail = p.off ? ' !!!' : '';
+	return `${p.name} - ${p.spec}${tail}`;
+}
+
+function teamOffCount(team: ExperimentalBalanceTeamJson): number {
+	return team.specs.filter((s) => s.off).length;
 }
 
 function teamHeader(
 	teamDisplayName: string,
 	team: ExperimentalBalanceTeamJson,
-	offPlaceholder: number,
+	teamOff: number,
 ): string {
 	const kd = Number.isFinite(team.total_net_kd_per_game)
 		? team.total_net_kd_per_game.toFixed(2)
 		: String(team.total_net_kd_per_game);
-	return `**__${teamDisplayName} Team__** - ${team.total_weight}  |  ${team.total_talkers}  |  ${team.total_win_loss}  |  ${kd}  |  ${offPlaceholder}`;
+	return `**__${teamDisplayName} Team__** - ${team.total_weight}  |  ${team.total_talkers}  |  ${team.total_win_loss}  |  ${kd}  |  ${teamOff}`;
 }
 
 function codeBlock(inner: string): string {
@@ -136,6 +144,18 @@ function formatBalancePrimaryFooter(meta: ExperimentalBalanceMetaJson): string {
 	const balanceS = (stepSumMs > 0 ? stepSumMs : meta.durationMs) / 1000;
 	const totalS = meta.durationMs / 1000;
 	return `Iterations: ${meta.iterations} | balance: ${balanceS.toFixed(2)}s | total: ${totalS.toFixed(2)}s`;
+}
+
+export function experimentalRepeatSpecWarningEmbed(
+	data: ExperimentalBalanceResponseJson,
+): EmbedBuilder | null {
+	const n = Math.trunc(data.total_off);
+	if (n <= 0) {
+		return null;
+	}
+	return new EmbedBuilder()
+		.setTitle(`Warning: ${n} players on repeat specs`)
+		.setColor(BALANCER_EMBED_WARNING);
 }
 
 export function experimentalBalanceEmbeds(
@@ -160,14 +180,12 @@ export function experimentalBalanceEmbeds(
 
 	const chromeColor = styleForTeamIndex(0).embedColor;
 
-	const offPlaceholder = 0;
-
 	const detailFields = teams.map((team, index) => {
 		const label = styleForTeamIndex(index).displayName;
 		const sortedW = [...team.specs].sort((a, b) => b.weight - a.weight);
 		const detail = sortedW.map(formatPlayerLineDetailed).join('\n');
 		return {
-			name: teamHeader(label, team, offPlaceholder),
+			name: teamHeader(label, team, teamOffCount(team)),
 			value: codeBlock(detail),
 			inline: false,
 		};
@@ -187,7 +205,7 @@ export function experimentalBalanceEmbeds(
 		);
 		const short = sortedSpec.map(formatPlayerLineShort).join('\n');
 		return {
-			name: teamHeader(label, team, offPlaceholder),
+			name: teamHeader(label, team, teamOffCount(team)),
 			value: codeBlock(short),
 			inline: true,
 		};
@@ -237,5 +255,47 @@ export function parseExperimentalBalanceResponse(
 	) {
 		return null;
 	}
-	return raw as ExperimentalBalanceResponseJson;
+
+	const normalizedBalance: ExperimentalBalanceTeamJson[] = [];
+	for (const item of balance) {
+		if (item === null || typeof item !== 'object') {
+			return null;
+		}
+		const t = item as Record<string, unknown>;
+		if (!Array.isArray(t.specs)) {
+			return null;
+		}
+		const specs: ExperimentalBalancePlayerSpecJson[] = [];
+		for (const specEl of t.specs) {
+			if (specEl === null || typeof specEl !== 'object') {
+				return null;
+			}
+			const s = specEl as Record<string, unknown>;
+			if (typeof s.off !== 'boolean') {
+				return null;
+			}
+			specs.push({
+				...(specEl as unknown as ExperimentalBalancePlayerSpecJson),
+				off: s.off,
+			});
+		}
+		normalizedBalance.push({
+			...(t as unknown as ExperimentalBalanceTeamJson),
+			specs,
+		});
+	}
+
+	let totalOff: number;
+	if (typeof o.total_off === 'number' && Number.isFinite(o.total_off)) {
+		totalOff = Math.trunc(o.total_off);
+	} else {
+		totalOff = normalizedBalance.reduce((acc, team) => acc + teamOffCount(team), 0);
+	}
+
+	return {
+		balance_id: balanceId,
+		balance: normalizedBalance,
+		meta: m as unknown as ExperimentalBalanceMetaJson,
+		total_off: totalOff,
+	};
 }
