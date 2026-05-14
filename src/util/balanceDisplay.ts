@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 
+import { markdownPlainCodeBlock } from './discordText.js';
 import { BALANCER_EMBED_BLUE, BALANCER_EMBED_WARNING } from './embedColors.js';
 
 const SPEC_SORT_ORDER: readonly string[] = [
@@ -134,11 +135,6 @@ function teamHeader(
 	return `**__${teamDisplayName} Team__** - ${team.total_weight}  |  ${team.total_talkers}  |  ${team.total_win_loss}  |  ${kd}  |  ${teamOff}`;
 }
 
-function codeBlock(inner: string): string {
-	const trimmed = inner.trimEnd();
-	return trimmed.length > 0 ? `\`\`\`\n${trimmed}\n\`\`\`` : '```\n_(empty)_\n```';
-}
-
 function balanceIdCodeBlockField(balanceId: string): {
 	name: string;
 	value: string;
@@ -146,7 +142,7 @@ function balanceIdCodeBlockField(balanceId: string): {
 } {
 	return {
 		name: '',
-		value: codeBlock(balanceId),
+		value: markdownPlainCodeBlock(balanceId),
 		inline: false,
 	};
 }
@@ -160,7 +156,7 @@ function codeBlockInnerText(value: string): string | null {
 	if (end <= 2) {
 		return null;
 	}
-	let inner = v.slice(3, end).replace(/^\w*\r?\n?/, '').trimEnd();
+	const inner = v.slice(3, end).replace(/^\w*\r?\n?/, '').trimEnd();
 	return inner.trim();
 }
 
@@ -229,7 +225,7 @@ export function experimentalBalanceEmbeds(
 		const detail = sortedW.map(formatPlayerLineDetailed).join('\n');
 		return {
 			name: teamHeader(label, team, teamOffCount(team)),
-			value: codeBlock(detail),
+			value: markdownPlainCodeBlock(detail),
 			inline: false,
 		};
 	});
@@ -249,7 +245,7 @@ export function experimentalBalanceEmbeds(
 		const short = sortedSpec.map(formatPlayerLineShort).join('\n');
 		return {
 			name: teamHeader(label, team, teamOffCount(team)),
-			value: codeBlock(short),
+			value: markdownPlainCodeBlock(short),
 			inline: true,
 		};
 	});

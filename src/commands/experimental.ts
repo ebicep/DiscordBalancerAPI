@@ -23,6 +23,7 @@ import { rememberBalanceRun } from '../util/balanceRunCache.js';
 import {
 	applyResultEmbedAfterInput,
 } from '../util/balanceResultChannelEmbed.js';
+import { formatInputTrajectoryDiscordContent } from '../util/inputTrajectoryReply.js';
 import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
@@ -427,20 +428,35 @@ export const experimental = {
 				},
 			);
 			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...fileOpts(files),
+				});
+				return;
+			}
+			const parsedResponse = parseJsonBody(rawBody);
+			const trajectoryContent = formatInputTrajectoryDiscordContent(
+				parsedBody,
+				parsedResponse,
+			);
+			const content =
+				trajectoryContent ??
+				'Input succeeded but response could not be summarized.';
 			await interaction.editReply({
-				files: balancerApiJsonAttachments(requestBody, rawBody),
+				content,
+				...fileOpts(files),
 			});
-			if (res.ok) {
-				try {
-					await applyResultEmbedAfterInput(
-						interaction.client,
-						BALANCE_POST_RESULT_CHANNEL_ID,
-						balanceId,
-						parsedBody,
-					);
-				} catch (err) {
-					console.error('balance result embed update failed', err);
-				}
+			try {
+				await applyResultEmbedAfterInput(
+					interaction.client,
+					BALANCE_POST_RESULT_CHANNEL_ID,
+					balanceId,
+					parsedBody,
+				);
+			} catch (err) {
+				console.error('balance result embed update failed', err);
 			}
 			return;
 		}
