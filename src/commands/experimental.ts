@@ -11,7 +11,6 @@ import { balancerFetch } from '../api/balancerApi.js';
 import {
 	extractProblemDetailFromParsedJson,
 	formatFailedApiBody,
-	formatFailedApiBodyAsPlainCodeBlock,
 } from '../util/apiErrorMessage.js';
 import {
 	balancerApiJsonAttachments,
@@ -451,7 +450,7 @@ export const experimental = {
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
 				await interaction.editReply({
-					content: formatFailedApiBodyAsPlainCodeBlock(res.status, rawBody),
+					content: formatFailedApiBody(res.status, rawBody),
 					...fileOpts(files),
 				});
 				return;
@@ -513,7 +512,7 @@ export const experimental = {
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
 				await interaction.editReply({
-					content: formatFailedApiBodyAsPlainCodeBlock(res.status, rawBody),
+					content: formatFailedApiBody(res.status, rawBody),
 					...fileOpts(files),
 				});
 				return;
