@@ -8,7 +8,11 @@ import {
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
-import { formatFailedApiBody } from '../util/apiErrorMessage.js';
+import {
+	extractProblemDetailFromParsedJson,
+	formatFailedApiBody,
+	formatFailedApiBodyAsPlainCodeBlock,
+} from '../util/apiErrorMessage.js';
 import {
 	balancerApiJsonAttachments,
 	jsonDiscordAttachment,
@@ -24,6 +28,7 @@ import {
 	applyResultEmbedAfterInput,
 } from '../util/balanceResultChannelEmbed.js';
 import { formatInputTrajectoryDiscordContent } from '../util/inputTrajectoryReply.js';
+import { plainCodeBlockWithinDiscordContentLimit } from '../util/discordText.js';
 import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
@@ -34,6 +39,21 @@ import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
 
 const fileOpts = (files: AttachmentBuilder[]) =>
 	files.length > 0 ? { files } : {};
+
+/** Trajectory table fence, else ProblemDetails-style text if present, else JSON in a plain fence. */
+function formatInputUninputSuccessContent(parsedResponse: unknown): string {
+	const trajectoryContent = formatInputTrajectoryDiscordContent(parsedResponse);
+	if (trajectoryContent !== null) {
+		return trajectoryContent;
+	}
+	const detail = extractProblemDetailFromParsedJson(parsedResponse);
+	if (detail !== null) {
+		return plainCodeBlockWithinDiscordContentLimit(detail);
+	}
+	return plainCodeBlockWithinDiscordContentLimit(
+		JSON.stringify(parsedResponse, null, 2),
+	);
+}
 
 /** On failure: editReply with error + attachments. On success: editReply with JSON fence (+ optional prefix). Returns whether response was OK. */
 async function replyWithBalancerJson(
@@ -431,16 +451,13 @@ export const experimental = {
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
 				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
+					content: formatFailedApiBodyAsPlainCodeBlock(res.status, rawBody),
 					...fileOpts(files),
 				});
 				return;
 			}
 			const parsedResponse = parseJsonBody(rawBody);
-			const trajectoryContent = formatInputTrajectoryDiscordContent(parsedResponse);
-			const content =
-				trajectoryContent ??
-				'Input succeeded but response could not be summarized.';
+			const content = formatInputUninputSuccessContent(parsedResponse);
 			await interaction.editReply({
 				content,
 				...fileOpts(files),
@@ -496,17 +513,13 @@ export const experimental = {
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
 			if (!res.ok) {
 				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
+					content: formatFailedApiBodyAsPlainCodeBlock(res.status, rawBody),
 					...fileOpts(files),
 				});
 				return;
 			}
 			const parsedResponse = parseJsonBody(rawBody);
-			const trajectoryContent =
-				formatInputTrajectoryDiscordContent(parsedResponse);
-			const content =
-				trajectoryContent ??
-				'Uninput succeeded but response could not be summarized.';
+			const content = formatInputUninputSuccessContent(parsedResponse);
 			await interaction.editReply({
 				content,
 				...fileOpts(files),

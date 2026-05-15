@@ -1,5 +1,8 @@
 import { httpFailureLine } from './discordSafeErrors.js';
-import { truncatePlainToMax } from './discordText.js';
+import {
+	plainCodeBlockWithinDiscordContentLimit,
+	truncatePlainToMax,
+} from './discordText.js';
 
 /** Walks `Error` / `Error.cause` chain and returns the first `NodeJS.ErrnoException.code`, if any. */
 export function extractErrnoCode(err: unknown): string | undefined {
@@ -50,6 +53,20 @@ function pickProblemJsonMessage(parsed: Record<string, unknown>): string | null 
 		}
 	}
 	return null;
+}
+
+/** ProblemDetails-style `detail` / `title` / validation `errors`, or `null` if none. */
+export function extractProblemDetailFromParsedJson(parsed: unknown): string | null {
+	if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+		return null;
+	}
+	const msg = pickProblemJsonMessage(parsed as Record<string, unknown>);
+	return msg === null ? null : truncatePlainToMax(msg);
+}
+
+/** Same text as {@link formatFailedApiBody}, wrapped in a plain markdown code fence for Discord. */
+export function formatFailedApiBodyAsPlainCodeBlock(status: number, raw: string): string {
+	return plainCodeBlockWithinDiscordContentLimit(formatFailedApiBody(status, raw));
 }
 
 /** User-visible text from a non-OK response body (already read). */
