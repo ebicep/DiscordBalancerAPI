@@ -4,18 +4,47 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 	return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-function formatOld(old: number | null): string {
+function formatOldTrajectory(old: number | null): string {
 	return old === null ? '0' : String(old);
 }
 
-function formatNew(n: number | null): string {
+function formatNewTrajectory(n: number | null): string {
 	return n === null ? '?' : String(n);
 }
 
-type TrajectoryRow = { name: string; old: number | null; new: number | null };
+function parseFiniteInt(v: unknown): number | null {
+	if (typeof v === 'number' && Number.isFinite(v) && Number.isInteger(v)) {
+		return v;
+	}
+	return null;
+}
+
+function parseNullableTrajectory(v: unknown): number | null | undefined {
+	if (v === null || v === undefined) {
+		return null;
+	}
+	if (typeof v === 'number' && Number.isFinite(v)) {
+		return v;
+	}
+	return undefined;
+}
+
+type ChangeRow = {
+	name: string;
+	oldTrajectory: number | null;
+	newTrajectory: number | null;
+	oldWins: number;
+	newWins: number;
+	oldLosses: number;
+	newLosses: number;
+	oldKills: number;
+	newKills: number;
+	oldDeaths: number;
+	newDeaths: number;
+};
 
 /**
- * Discord message `content`: fenced code block summarizing `adjustment_trajectories`
+ * Discord message `content`: fenced code block summarizing `changes`
  * from the API response only, or `null` if the shape is invalid.
  */
 export function formatInputTrajectoryDiscordContent(
@@ -24,52 +53,75 @@ export function formatInputTrajectoryDiscordContent(
 	if (!isPlainObject(responseParsed)) {
 		return null;
 	}
-	if (!Object.prototype.hasOwnProperty.call(responseParsed, 'adjustment_trajectories')) {
+	if (!Object.prototype.hasOwnProperty.call(responseParsed, 'changes')) {
 		return null;
 	}
-	const rawTraj = responseParsed.adjustment_trajectories;
-	if (rawTraj === null || rawTraj === undefined) {
-		return plainCodeBlockWithinDiscordContentLimit('(no adjustment trajectories)');
+	const rawChanges = responseParsed.changes;
+	if (rawChanges === null || rawChanges === undefined) {
+		return plainCodeBlockWithinDiscordContentLimit('(no changes)');
 	}
-	if (!Array.isArray(rawTraj)) {
+	if (!Array.isArray(rawChanges)) {
 		return null;
 	}
 
-	const rows: TrajectoryRow[] = [];
+	const rows: ChangeRow[] = [];
 
-	for (const el of rawTraj) {
+	for (const el of rawChanges) {
 		if (!isPlainObject(el)) {
 			return null;
 		}
 
 		const name = typeof el.name === 'string' ? el.name.trim() : '';
 
-		const oldRaw = el.old;
-		let oldNum: number | null;
-		if (oldRaw === null || oldRaw === undefined) {
-			oldNum = null;
-		} else if (typeof oldRaw === 'number' && Number.isFinite(oldRaw)) {
-			oldNum = oldRaw;
-		} else {
+		const oldTrajectory = parseNullableTrajectory(el.old_trajectory);
+		if (oldTrajectory === undefined) {
 			return null;
 		}
 
-		const newRaw = el.new;
-		let newNum: number | null;
-		if (newRaw === null || newRaw === undefined) {
-			newNum = null;
-		} else if (typeof newRaw === 'number' && Number.isFinite(newRaw)) {
-			newNum = newRaw;
-		} else {
+		const newTrajectory = parseNullableTrajectory(el.new_trajectory);
+		if (newTrajectory === undefined) {
 			return null;
 		}
 
-		rows.push({ name, old: oldNum, new: newNum });
+		const oldWins = parseFiniteInt(el.old_wins);
+		const newWins = parseFiniteInt(el.new_wins);
+		const oldLosses = parseFiniteInt(el.old_losses);
+		const newLosses = parseFiniteInt(el.new_losses);
+		const oldKills = parseFiniteInt(el.old_kills);
+		const newKills = parseFiniteInt(el.new_kills);
+		const oldDeaths = parseFiniteInt(el.old_deaths);
+		const newDeaths = parseFiniteInt(el.new_deaths);
+		if (
+			oldWins === null ||
+			newWins === null ||
+			oldLosses === null ||
+			newLosses === null ||
+			oldKills === null ||
+			newKills === null ||
+			oldDeaths === null ||
+			newDeaths === null
+		) {
+			return null;
+		}
+
+		rows.push({
+			name,
+			oldTrajectory,
+			newTrajectory,
+			oldWins,
+			newWins,
+			oldLosses,
+			newLosses,
+			oldKills,
+			newKills,
+			oldDeaths,
+			newDeaths,
+		});
 	}
 
 	rows.sort((a, b) => {
-		const bn = b.new ?? Number.NEGATIVE_INFINITY;
-		const an = a.new ?? Number.NEGATIVE_INFINITY;
+		const bn = b.newTrajectory ?? Number.NEGATIVE_INFINITY;
+		const an = a.newTrajectory ?? Number.NEGATIVE_INFINITY;
 		const byNew = bn - an;
 		if (byNew !== 0) {
 			return byNew;
@@ -78,13 +130,13 @@ export function formatInputTrajectoryDiscordContent(
 	});
 
 	const lines = rows.map(
-		(r) => `${r.name}: ${formatOld(r.old)} > ${formatNew(r.new)}`,
+		(r) =>
+			`${r.name}: ${formatOldTrajectory(r.oldTrajectory)} > ${formatNewTrajectory(r.newTrajectory)} ` +
+			`(${r.oldWins}:${r.oldLosses} > ${r.newWins}:${r.newLosses}) ` +
+			`(${r.oldKills}:${r.oldDeaths} > ${r.newKills}:${r.newDeaths})`,
 	);
 
-	const inner =
-		lines.length === 0
-			? '(no adjustment trajectories)'
-			: lines.join('\n');
+	const inner = lines.length === 0 ? '(no changes)' : lines.join('\n');
 
 	return plainCodeBlockWithinDiscordContentLimit(inner);
 }
