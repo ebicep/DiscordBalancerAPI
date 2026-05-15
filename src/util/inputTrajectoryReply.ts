@@ -4,78 +4,21 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 	return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-function normalizeUuidKey(raw: unknown): string | null {
-	if (typeof raw !== 'string') {
-		return null;
-	}
-	const s = raw.trim().toLowerCase();
-	if (
-		!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-			s,
-		)
-	) {
-		return null;
-	}
-	return s;
+function formatOld(old: number | null): string {
+	return old === null ? '0' : String(old);
 }
 
-function ingestPlayerLines(
-	map: Map<string, string>,
-	side: unknown,
-): void {
-	if (!Array.isArray(side)) {
-		return;
-	}
-	for (const el of side) {
-		if (!isPlainObject(el)) {
-			continue;
-		}
-		const uuidKey = normalizeUuidKey(el.uuid);
-		const nameVal = el.name;
-		if (uuidKey === null || typeof nameVal !== 'string') {
-			continue;
-		}
-		const name = nameVal.trim();
-		if (name.length === 0) {
-			continue;
-		}
-		map.set(uuidKey, name);
-	}
+function formatNew(n: number | null): string {
+	return n === null ? '?' : String(n);
 }
 
-function uuidToNameFromInputBody(requestBody: unknown): Map<string, string> {
-	const map = new Map<string, string>();
-	if (!isPlainObject(requestBody)) {
-		return map;
-	}
-	ingestPlayerLines(map, requestBody.winners);
-	ingestPlayerLines(map, requestBody.losers);
-	return map;
-}
-
-function formatOld(oldVal: unknown): string | null {
-	if (oldVal === null || oldVal === undefined) {
-		return '0';
-	}
-	if (typeof oldVal === 'number' && Number.isFinite(oldVal)) {
-		return String(oldVal);
-	}
-	return null;
-}
-
-function formatNew(newVal: unknown): string | null {
-	if (typeof newVal === 'number' && Number.isFinite(newVal)) {
-		return String(newVal);
-	}
-	return null;
-}
+type TrajectoryRow = { name: string; old: number | null; new: number | null };
 
 /**
- * Discord message `content`: fenced code block summarizing adjustment_trajectories,
- * or `null` if the response shape cannot be summarized.
+ * Discord message `content`: fenced code block summarizing `adjustment_trajectories`
+ * from the API response only, or `null` if the shape is invalid.
  */
 export function formatInputTrajectoryDiscordContent(
-	requestBody: unknown,
 	responseParsed: unknown,
 ): string | null {
 	if (!isPlainObject(responseParsed)) {
@@ -85,34 +28,23 @@ export function formatInputTrajectoryDiscordContent(
 		return null;
 	}
 	const rawTraj = responseParsed.adjustment_trajectories;
-	let trajectories: Record<string, unknown>;
 	if (rawTraj === null || rawTraj === undefined) {
-		trajectories = {};
-	} else if (!isPlainObject(rawTraj)) {
+		return plainCodeBlockWithinDiscordContentLimit('(no adjustment trajectories)');
+	}
+	if (!Array.isArray(rawTraj)) {
 		return null;
-	} else {
-		trajectories = rawTraj;
 	}
 
-	const uuidToName = uuidToNameFromInputBody(requestBody);
-	const uuidToTraj = new Map<
-		string,
-		{ old: number | null; new: number; rawKey: string }
-	>();
+	const rows: TrajectoryRow[] = [];
 
-	for (const [uuidRaw, pairRaw] of Object.entries(trajectories)) {
-		const uuidCanon = normalizeUuidKey(uuidRaw);
-		if (uuidCanon === null) {
-			continue;
-		}
-		if (!isPlainObject(pairRaw)) {
+	for (const el of rawTraj) {
+		if (!isPlainObject(el)) {
 			return null;
 		}
-		const newVal = pairRaw.new;
-		if (typeof newVal !== 'number' || !Number.isFinite(newVal)) {
-			return null;
-		}
-		const oldRaw = pairRaw.old;
+
+		const name = typeof el.name === 'string' ? el.name.trim() : '';
+
+		const oldRaw = el.old;
 		let oldNum: number | null;
 		if (oldRaw === null || oldRaw === undefined) {
 			oldNum = null;
@@ -121,35 +53,38 @@ export function formatInputTrajectoryDiscordContent(
 		} else {
 			return null;
 		}
-		uuidToTraj.set(uuidCanon, {
-			old: oldNum,
-			new: newVal,
-			rawKey: uuidRaw.trim(),
-		});
+
+		const newRaw = el.new;
+		let newNum: number | null;
+		if (newRaw === null || newRaw === undefined) {
+			newNum = null;
+		} else if (typeof newRaw === 'number' && Number.isFinite(newRaw)) {
+			newNum = newRaw;
+		} else {
+			return null;
+		}
+
+		rows.push({ name, old: oldNum, new: newNum });
 	}
 
-	const sorted = [...uuidToTraj.entries()].sort((a, b) => {
-		const d = b[1].new - a[1].new;
-		if (d !== 0) {
-			return d;
+	rows.sort((a, b) => {
+		const bn = b.new ?? Number.NEGATIVE_INFINITY;
+		const an = a.new ?? Number.NEGATIVE_INFINITY;
+		const byNew = bn - an;
+		if (byNew !== 0) {
+			return byNew;
 		}
-		return a[0].localeCompare(b[0]);
+		return a.name.localeCompare(b.name);
 	});
 
-	const lines: string[] = [];
-	for (const [uuidCanon, traj] of sorted) {
-		const oldStr = formatOld(traj.old);
-		const newStr = formatNew(traj.new);
-		const displayName = uuidToName.get(uuidCanon) ?? traj.rawKey;
-		lines.push(`${displayName}: ${oldStr} > ${newStr}`);
-	}
+	const lines = rows.map(
+		(r) => `${r.name}: ${formatOld(r.old)} > ${formatNew(r.new)}`,
+	);
 
-	let inner: string;
-	if (lines.length === 0) {
-		inner = '(no adjustment trajectories)';
-	} else {
-		inner = lines.join('\n');
-	}
+	const inner =
+		lines.length === 0
+			? '(no adjustment trajectories)'
+			: lines.join('\n');
 
 	return plainCodeBlockWithinDiscordContentLimit(inner);
 }

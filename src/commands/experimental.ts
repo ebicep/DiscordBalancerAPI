@@ -437,10 +437,7 @@ export const experimental = {
 				return;
 			}
 			const parsedResponse = parseJsonBody(rawBody);
-			const trajectoryContent = formatInputTrajectoryDiscordContent(
-				parsedBody,
-				parsedResponse,
-			);
+			const trajectoryContent = formatInputTrajectoryDiscordContent(parsedResponse);
 			const content =
 				trajectoryContent ??
 				'Input succeeded but response could not be summarized.';
@@ -496,8 +493,23 @@ export const experimental = {
 				init,
 			);
 			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...fileOpts(files),
+				});
+				return;
+			}
+			const parsedResponse = parseJsonBody(rawBody);
+			const trajectoryContent =
+				formatInputTrajectoryDiscordContent(parsedResponse);
+			const content =
+				trajectoryContent ??
+				'Uninput succeeded but response could not be summarized.';
 			await interaction.editReply({
-				files: balancerApiJsonAttachments(requestBody, rawBody),
+				content,
+				...fileOpts(files),
 			});
 		}
 	},
