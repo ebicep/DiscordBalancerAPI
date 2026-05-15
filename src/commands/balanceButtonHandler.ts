@@ -16,6 +16,7 @@ import {
 	experimentalRepeatSpecWarningEmbed,
 	parseExperimentalBalanceResponse,
 } from '../util/balanceDisplay.js';
+import { markdownPlainCodeBlock } from '../util/discordText.js';
 import { getBalanceRun, rememberBalanceRun } from '../util/balanceRunCache.js';
 import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
 import {
@@ -179,13 +180,24 @@ export async function handleBalanceButton(
 		await editBalanceButtons(interaction, [
 			buildPostedBalanceRow(balanceActorDisplayName(interaction)),
 		]);
-		if (files.length > 0) {
-			const channel = interaction.channel;
-			if (
-				channel !== null &&
-				channel.isTextBased() &&
-				!channel.isDMBased()
-			) {
+		const parsedConfirm = parseJsonBody(rawBody);
+		let postedBalanceId = balanceId;
+		if (parsedConfirm !== null && typeof parsedConfirm === 'object') {
+			const id = (parsedConfirm as Record<string, unknown>).balance_id;
+			if (typeof id === 'string' && id.trim().length > 0) {
+				postedBalanceId = id.trim();
+			}
+		}
+		const channel = interaction.channel;
+		if (
+			channel !== null &&
+			channel.isTextBased() &&
+			!channel.isDMBased()
+		) {
+			await channel.send({
+				content: markdownPlainCodeBlock(postedBalanceId),
+			});
+			if (files.length > 0) {
 				await channel.send({
 					...fileOpts(files),
 				});
