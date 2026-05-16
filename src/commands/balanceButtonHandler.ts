@@ -16,6 +16,7 @@ import {
 	experimentalRepeatSpecWarningEmbed,
 	parseExperimentalBalanceResponse,
 } from '../util/balanceDisplay.js';
+import { hasCoordinatorRole } from '../util/coordinatorPlayer.js';
 import { markdownPlainCodeBlock } from '../util/discordText.js';
 import { getBalanceRun, rememberBalanceRun } from '../util/balanceRunCache.js';
 import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
@@ -49,6 +50,10 @@ export async function handleBalanceButton(
 			content: 'This balance message expired or is no longer valid.',
 			flags: MessageFlags.Ephemeral,
 		});
+		return;
+	}
+
+	if (!hasCoordinatorRole(interaction)) {
 		return;
 	}
 

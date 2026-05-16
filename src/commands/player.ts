@@ -1,7 +1,6 @@
 import {
 	ActionRowBuilder,
 	ButtonBuilder,
-	type ButtonInteraction,
 	ButtonStyle,
 	ComponentType,
 	EmbedBuilder,
@@ -10,6 +9,7 @@ import {
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
+import { hasCoordinatorRole } from '../util/coordinatorPlayer.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import {
 	interactionMemberDisplayName,
@@ -146,9 +146,8 @@ export const player = {
 			time: 20_000,
 			componentType: ComponentType.Button,
 			filter: (i) =>
-				i.customId === PLAYER_CONFIRM || i.customId === PLAYER_CANCEL
-					? i.user.id === interaction.user.id
-					: false,
+				(i.customId === PLAYER_CONFIRM || i.customId === PLAYER_CANCEL) &&
+				hasCoordinatorRole(i),
 		}).catch(() => null);
 
 		if (clicked === null) {
