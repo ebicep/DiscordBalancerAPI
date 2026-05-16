@@ -179,16 +179,6 @@ function isSpecLogsResponse(value: unknown): value is ExperimentalSpecLogsRespon
 	);
 }
 
-function formatExperimentalSpecLogs(log: Record<string, string[]>): string {
-	const sections = EXPERIMENTAL_SPECS_ORDERED.map((spec) => {
-		const names = log[spec.toLowerCase()] ?? [];
-		const bullet =
-			names.length > 0 ? `${names.join(' | ')}` : ' ';
-		return `# ${spec}\n\`\`\`${bullet}\`\`\``;
-	});
-	return truncateDiscordReply(sections.join('\n'));
-}
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isUuid(s: string): boolean {
@@ -517,13 +507,12 @@ export const experimental = {
 				return;
 			}
 
-			const body = formatExperimentalSpecLogs(parsed.log);
 			const prefix =
 				sub === 'logs'
 					? `**${parsed.count}** logged balance(s).`
 					: `**${parsed.count}** balance(s) removed.`;
 			await interaction.editReply({
-				content: `${prefix}\n\n${body}`,
+				content: `${prefix}`,
 				...fileOpts(files),
 			});
 			return;
