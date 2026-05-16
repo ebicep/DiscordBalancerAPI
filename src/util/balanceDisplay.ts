@@ -116,8 +116,7 @@ function formatPlayerLineDetailed(p: ExperimentalBalancePlayerSpecJson): string 
 }
 
 function formatPlayerLineShort(p: ExperimentalBalancePlayerSpecJson): string {
-	const tail = p.off ? ' !!!' : '';
-	return `${p.name} - ${p.spec}${tail}`;
+	return `${p.name} - ${p.spec}`;
 }
 
 function teamOffCount(team: ExperimentalBalanceTeamJson): number {
