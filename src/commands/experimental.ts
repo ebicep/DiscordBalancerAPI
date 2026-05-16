@@ -208,7 +208,7 @@ export const experimental = {
 		.addSubcommand((sub) =>
 			sub
 				.setName('uninput')
-				.setDescription('Undo input (POST …/uninput)')
+				.setDescription('Undo input (POST …/uninput; same JSON as input)')
 				.addStringOption((o) =>
 					o
 						.setName('balance_id')
@@ -218,8 +218,8 @@ export const experimental = {
 				.addStringOption((o) =>
 					o
 						.setName('body')
-						.setDescription('Optional JSON body (trajectory echo)')
-						.setRequired(false),
+						.setDescription('JSON body (winners, losers, game_id — must match stored input)')
+						.setRequired(true),
 				),
 		)
 		.addSubcommand((sub) =>
@@ -476,37 +476,30 @@ export const experimental = {
 
 		if (sub === 'uninput') {
 			const balanceId = interaction.options.getString('balance_id', true).trim();
-			const bodyOpt = interaction.options.getString('body');
+			const bodyRaw = interaction.options.getString('body', true);
 			if (!isUuid(balanceId)) {
 				await interaction.editReply({
 					content: '`balance_id` must be a valid UUID.',
 				});
 				return;
 			}
-			const trimmed = bodyOpt?.trim() ?? '';
-			let init: Parameters<typeof balancerFetch>[1];
-			if (trimmed === '') {
-				init = { method: 'POST' };
-			} else {
-				let parsedBody: unknown;
-				try {
-					parsedBody = JSON.parse(trimmed) as unknown;
-				} catch {
-					await interaction.editReply({
-						content: '`body` must be valid JSON when provided.',
-					});
-					return;
-				}
-				const serialized = JSON.stringify(parsedBody);
-				init = {
+			let parsedBody: unknown;
+			try {
+				parsedBody = JSON.parse(bodyRaw) as unknown;
+			} catch {
+				await interaction.editReply({
+					content: '`body` must be valid JSON.',
+				});
+				return;
+			}
+			const serialized = JSON.stringify(parsedBody);
+			const { response: res, requestBody } = await balancerFetch(
+				`/experimental/balance/${balanceId}/uninput`,
+				{
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: serialized,
-				};
-			}
-			const { response: res, requestBody } = await balancerFetch(
-				`/experimental/balance/${balanceId}/uninput`,
-				init,
+				},
 			);
 			const rawBody = await res.text();
 			const files = balancerApiJsonAttachments(requestBody, rawBody);
