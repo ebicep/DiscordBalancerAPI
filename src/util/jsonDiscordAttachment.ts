@@ -1,44 +1,5 @@
 import { AttachmentBuilder } from 'discord.js';
 
-const UNINPUT_OMIT_CHANGE_FIELDS = [
-	'old_wins',
-	'new_wins',
-	'old_losses',
-	'new_losses',
-	'old_kills',
-	'new_kills',
-	'old_deaths',
-	'new_deaths',
-] as const;
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-	return v !== null && typeof v === 'object' && !Array.isArray(v);
-}
-
-/** Input API response with W/L/K/D stripped from each change (trajectory echo for uninput). */
-export function stripWlKdFieldsForUninput(response: unknown): unknown {
-	if (!isPlainObject(response)) {
-		return response;
-	}
-	const changes = response.changes;
-	if (!Array.isArray(changes)) {
-		return response;
-	}
-	return {
-		...response,
-		changes: changes.map((item) => {
-			if (!isPlainObject(item)) {
-				return item;
-			}
-			const stripped = { ...item };
-			for (const key of UNINPUT_OMIT_CHANGE_FIELDS) {
-				delete stripped[key];
-			}
-			return stripped;
-		}),
-	};
-}
-
 export function parseJsonBody(raw: string): unknown {
 	const trimmed = raw.trim();
 	if (trimmed === '') {
