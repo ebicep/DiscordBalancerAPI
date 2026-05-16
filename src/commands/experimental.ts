@@ -1,7 +1,6 @@
 import {
 	type AttachmentBuilder,
 	type ChatInputCommandInteraction,
-	GuildMember,
 	type GuildTextBasedChannel,
 	MessageFlags,
 	SlashCommandBuilder,
@@ -28,8 +27,8 @@ import {
 	applyResultEmbedAfterInput,
 } from '../util/balanceResultChannelEmbed.js';
 import { formatInputTrajectoryDiscordContent } from '../util/inputTrajectoryReply.js';
+import { resolveOptionalPlayerName } from '../util/coordinatorPlayer.js';
 import {
-	interactionMemberDisplayName,
 	plainCodeBlockWithinDiscordContentLimit,
 	truncateDiscordReply,
 } from '../util/discordText.js';
@@ -43,22 +42,6 @@ import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
 
 const fileOpts = (files: AttachmentBuilder[]) =>
 	files.length > 0 ? { files } : {};
-
-function hasCoordinatorRole(interaction: ChatInputCommandInteraction): boolean {
-	const { member } = interaction;
-	return (
-		member instanceof GuildMember &&
-		member.roles.cache.some((role) => role.name === 'COORDINATOR')
-	);
-}
-
-function resolveDailyPlayerName(interaction: ChatInputCommandInteraction): string {
-	const nameOpt = interaction.options.getString('name')?.trim() ?? '';
-	if (hasCoordinatorRole(interaction) && nameOpt.length > 0) {
-		return nameOpt;
-	}
-	return interactionMemberDisplayName(interaction);
-}
 
 type ExperimentalDailyStatsBody = {
 	wins?: number;
@@ -79,6 +62,13 @@ function formatDailyStatsReply(body: ExperimentalDailyStatsBody): string {
 	return [`Wins: ${wins}`, `Losses: ${losses}`, `Kills: ${kills}`, `Deaths: ${deaths}`].join(
 		'\n',
 	);
+}
+
+function formatSpecWeightsReply(body: Record<string, unknown>): string {
+	return EXPERIMENTAL_SPECS_ORDERED.map((spec) => {
+		const v = body[spec] ?? body[spec.toLowerCase()];
+		return `${spec}: ${typeof v === 'number' ? v : 0}`;
+	}).join('\n');
 }
 
 /** Trajectory table fence, else ProblemDetails-style text if present, else JSON in a plain fence. */
@@ -347,6 +337,14 @@ export const experimental = {
 				.addStringOption((o) =>
 					o.setName('name').setDescription('Player name').setRequired(false),
 				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('spec-weights')
+				.setDescription('Combined spec weights for a player (GET /experimental/spec-weights)')
+				.addStringOption((o) =>
+					o.setName('name').setDescription('Player name or UUID').setRequired(false),
+				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -524,7 +522,7 @@ export const experimental = {
 		}
 
 		if (sub === 'daily') {
-			const effectiveName = resolveDailyPlayerName(interaction);
+			const effectiveName = resolveOptionalPlayerName(interaction);
 			let res: Response;
 			let requestBody: string | undefined;
 			try {
@@ -555,6 +553,42 @@ export const experimental = {
 			await interaction.editReply({
 				content: formatDailyStatsReply(body),
 				...fileOpts(files),
+			});
+			return;
+		}
+
+		if (sub === 'spec-weights') {
+			const effectiveName = resolveOptionalPlayerName(interaction);
+			let res: Response;
+			let requestBody: string | undefined;
+			try {
+				const out = await balancerFetch(
+					`/experimental/spec-weights/${encodeURIComponent(effectiveName)}`,
+					{ method: 'GET' },
+				);
+				res = out.response;
+				requestBody = out.requestBody;
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : 'Could not reach Balancer API.';
+				await interaction.editReply({ content: message });
+				return;
+			}
+
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...fileOpts(files),
+				});
+				return;
+			}
+
+			const body = parseJsonBody(rawBody) as Record<string, unknown>;
+			await interaction.editReply({
+				content: plainCodeBlockWithinDiscordContentLimit(formatSpecWeightsReply(body)),
+				// ...fileOpts(files),
 			});
 			return;
 		}
