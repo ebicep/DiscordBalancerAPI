@@ -16,6 +16,7 @@ import {
 	balancerApiJsonAttachments,
 	jsonDiscordAttachment,
 	parseJsonBody,
+	stripWlKdFieldsForUninput,
 } from '../util/jsonDiscordAttachment.js';
 import {
 	experimentalBalanceEmbeds,
@@ -457,9 +458,16 @@ export const experimental = {
 			}
 			const parsedResponse = parseJsonBody(rawBody);
 			const content = formatInputUninputSuccessContent(parsedResponse);
+			const successFiles = [
+				...files,
+				jsonDiscordAttachment(
+					'uninput.json',
+					stripWlKdFieldsForUninput(parsedResponse),
+				),
+			];
 			await interaction.editReply({
 				content,
-				...fileOpts(files),
+				...fileOpts(successFiles),
 			});
 			try {
 				await applyResultEmbedAfterInput(
