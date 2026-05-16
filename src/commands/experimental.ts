@@ -27,7 +27,10 @@ import {
 	applyResultEmbedAfterInput,
 } from '../util/balanceResultChannelEmbed.js';
 import { formatInputTrajectoryDiscordContent } from '../util/inputTrajectoryReply.js';
-import { plainCodeBlockWithinDiscordContentLimit } from '../util/discordText.js';
+import {
+	plainCodeBlockWithinDiscordContentLimit,
+	truncateDiscordReply,
+} from '../util/discordText.js';
 import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
@@ -137,6 +140,55 @@ async function dispatchExperimentalRunFailure(
 	await interaction.editReply(fallbackPayload);
 }
 
+const EXPERIMENTAL_SPECS_ORDERED: readonly string[] = [
+	'Pyromancer',
+	'Cryomancer',
+	'Aquamancer',
+	'Berserker',
+	'Defender',
+	'Revenant',
+	'Avenger',
+	'Crusader',
+	'Protector',
+	'Thunderlord',
+	'Spiritguard',
+	'Earthwarden',
+	'Assassin',
+	'Vindicator',
+	'Apothecary',
+	'Conjurer',
+	'Sentinel',
+	'Luminary',
+] as const;
+
+type ExperimentalSpecLogsResponse = {
+	count: number;
+	log: Record<string, string[]>;
+};
+
+function isSpecLogsResponse(value: unknown): value is ExperimentalSpecLogsResponse {
+	if (value === null || typeof value !== 'object') {
+		return false;
+	}
+	const o = value as Record<string, unknown>;
+	if (typeof o.count !== 'number' || o.log === null || typeof o.log !== 'object') {
+		return false;
+	}
+	return Object.values(o.log as Record<string, unknown>).every(
+		(v) => Array.isArray(v) && v.every((name) => typeof name === 'string'),
+	);
+}
+
+function formatExperimentalSpecLogs(log: Record<string, string[]>): string {
+	const sections = EXPERIMENTAL_SPECS_ORDERED.map((spec) => {
+		const names = log[spec.toLowerCase()] ?? [];
+		const bullet =
+			names.length > 0 ? `${names.join(' | ')}` : '-';
+		return `# ${spec}\n\`\`\`${bullet}\`\`\``;
+	});
+	return truncateDiscordReply(sections.join('\n'));
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isUuid(s: string): boolean {
@@ -243,6 +295,11 @@ export const experimental = {
 						.setDescription('Balance UUID')
 						.setRequired(true),
 				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('logs')
+				.setDescription('Spec assignment history (GET /experimental/logs)'),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -415,6 +472,48 @@ export const experimental = {
 			const pretty = parseJsonBody(rawBody);
 			await interaction.editReply({
 				files: [jsonDiscordAttachment('response.json', pretty)],
+			});
+			return;
+		}
+
+		if (sub === 'logs') {
+			let res: Response;
+			let requestBody: string | undefined;
+			try {
+				const out = await balancerFetch('/experimental/logs', { method: 'GET' });
+				res = out.response;
+				requestBody = out.requestBody;
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : 'Could not reach Balancer API.';
+				await interaction.editReply({ content: message });
+				return;
+			}
+
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...fileOpts(files),
+				});
+				return;
+			}
+
+			const parsed = parseJsonBody(rawBody);
+			if (!isSpecLogsResponse(parsed)) {
+				await interaction.editReply({
+					content: 'Logs API returned an unexpected JSON shape.',
+					...fileOpts(files),
+				});
+				return;
+			}
+
+			const body = formatExperimentalSpecLogs(parsed.log);
+			const prefix = `**${parsed.count}** logged balance(s).`;
+			await interaction.editReply({
+				content: `${prefix}\n\n${body}`,
+				...fileOpts(files),
 			});
 			return;
 		}
