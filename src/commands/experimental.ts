@@ -183,7 +183,7 @@ function formatExperimentalSpecLogs(log: Record<string, string[]>): string {
 	const sections = EXPERIMENTAL_SPECS_ORDERED.map((spec) => {
 		const names = log[spec.toLowerCase()] ?? [];
 		const bullet =
-			names.length > 0 ? `${names.join(' | ')}` : '-';
+			names.length > 0 ? `${names.join(' | ')}` : ' ';
 		return `# ${spec}\n\`\`\`${bullet}\`\`\``;
 	});
 	return truncateDiscordReply(sections.join('\n'));
@@ -300,6 +300,11 @@ export const experimental = {
 			sub
 				.setName('logs')
 				.setDescription('Spec assignment history (GET /experimental/logs)'),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('logs-truncate')
+				.setDescription('Truncate oldest spec logs (POST /experimental/logs/truncate)'),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -476,11 +481,14 @@ export const experimental = {
 			return;
 		}
 
-		if (sub === 'logs') {
+		if (sub === 'logs' || sub === 'logs-truncate') {
 			let res: Response;
 			let requestBody: string | undefined;
 			try {
-				const out = await balancerFetch('/experimental/logs', { method: 'GET' });
+				const out =
+					sub === 'logs'
+						? await balancerFetch('/experimental/logs', { method: 'GET' })
+						: await balancerFetch('/experimental/logs/truncate', { method: 'POST' });
 				res = out.response;
 				requestBody = out.requestBody;
 			} catch (err) {
@@ -510,7 +518,10 @@ export const experimental = {
 			}
 
 			const body = formatExperimentalSpecLogs(parsed.log);
-			const prefix = `**${parsed.count}** logged balance(s).`;
+			const prefix =
+				sub === 'logs'
+					? `**${parsed.count}** logged balance(s).`
+					: `**${parsed.count}** balance(s) removed.`;
 			await interaction.editReply({
 				content: `${prefix}\n\n${body}`,
 				...fileOpts(files),
