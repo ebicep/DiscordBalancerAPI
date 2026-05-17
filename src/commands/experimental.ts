@@ -27,11 +27,7 @@ import {
 	applyResultEmbedAfterInput,
 } from '../util/balanceResultChannelEmbed.js';
 import { formatInputTrajectoryDiscordContent } from '../util/inputTrajectoryReply.js';
-import { resolveOptionalPlayerName } from '../util/coordinatorPlayer.js';
-import {
-	plainCodeBlockWithinDiscordContentLimit,
-	truncateDiscordReply,
-} from '../util/discordText.js';
+import { plainCodeBlockWithinDiscordContentLimit } from '../util/discordText.js';
 import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
@@ -39,43 +35,9 @@ import {
 } from '../util/replyThread.js';
 import { buildBalanceButtonRow } from './balanceButtons.js';
 import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
-import {
-	specWeightLeaderboardEmbed,
-	type SpecWeightLeaderboardResponseJson,
-} from '../util/leaderboardEmbed.js';
-
-const LEADERBOARD_PAGE_SIZE = 10;
 
 const fileOpts = (files: AttachmentBuilder[]) =>
 	files.length > 0 ? { files } : {};
-
-type ExperimentalDailyStatsBody = {
-	wins?: number;
-	losses?: number;
-	kills?: number;
-	deaths?: number;
-	Wins?: number;
-	Losses?: number;
-	Kills?: number;
-	Deaths?: number;
-};
-
-function formatDailyStatsReply(body: ExperimentalDailyStatsBody): string {
-	const wins = body.wins ?? body.Wins ?? 0;
-	const losses = body.losses ?? body.Losses ?? 0;
-	const kills = body.kills ?? body.Kills ?? 0;
-	const deaths = body.deaths ?? body.Deaths ?? 0;
-	return [`Wins: ${wins}`, `Losses: ${losses}`, `Kills: ${kills}`, `Deaths: ${deaths}`].join(
-		'\n',
-	);
-}
-
-function formatSpecWeightsReply(body: Record<string, unknown>): string {
-	return EXPERIMENTAL_SPECS_ORDERED.map((spec) => {
-		const v = body[spec] ?? body[spec.toLowerCase()];
-		return `${spec}: ${typeof v === 'number' ? v : 0}`;
-	}).join('\n');
-}
 
 /** Trajectory table fence, else ProblemDetails-style text if present, else JSON in a plain fence. */
 function formatInputUninputSuccessContent(parsedResponse: unknown): string {
@@ -174,27 +136,6 @@ async function dispatchExperimentalRunFailure(
 
 	await interaction.editReply(fallbackPayload);
 }
-
-const EXPERIMENTAL_SPECS_ORDERED: readonly string[] = [
-	'Pyromancer',
-	'Cryomancer',
-	'Aquamancer',
-	'Berserker',
-	'Defender',
-	'Revenant',
-	'Avenger',
-	'Crusader',
-	'Protector',
-	'Thunderlord',
-	'Spiritguard',
-	'Earthwarden',
-	'Assassin',
-	'Vindicator',
-	'Apothecary',
-	'Conjurer',
-	'Sentinel',
-	'Luminary',
-] as const;
 
 type ExperimentalSpecLogsResponse = {
 	count: number;
@@ -335,34 +276,6 @@ export const experimental = {
 			sub
 				.setName('logs-clear')
 				.setDescription('Clear all spec logs (POST /experimental/logs/clear)'),
-		)
-		.addSubcommand((sub) =>
-			sub
-				.setName('daily')
-				.setDescription("Today's W/L/K/D for a player")
-				.addStringOption((o) =>
-					o.setName('name').setDescription('Player name').setRequired(false),
-				),
-		)
-		.addSubcommand((sub) =>
-			sub
-				.setName('spec-weights')
-				.setDescription('Combined spec weights for a player (GET /experimental/spec-weights)')
-				.addStringOption((o) =>
-					o.setName('name').setDescription('Player name or UUID').setRequired(false),
-				),
-		)
-		.addSubcommand((sub) =>
-			sub
-				.setName('leaderboard')
-				.setDescription('Top spec weights per class (GET /experimental/spec-weights/leaderboard)')
-				.addIntegerOption((o) =>
-					o
-						.setName('page')
-						.setDescription('Page number (default 1)')
-						.setRequired(false)
-						.setMinValue(1),
-				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -535,108 +448,6 @@ export const experimental = {
 			const pretty = parseJsonBody(rawBody);
 			await interaction.editReply({
 				files: [jsonDiscordAttachment('response.json', pretty)],
-			});
-			return;
-		}
-
-		if (sub === 'daily') {
-			const effectiveName = resolveOptionalPlayerName(interaction);
-			let res: Response;
-			let requestBody: string | undefined;
-			try {
-				const out = await balancerFetch(
-					`/experimental/daily/${encodeURIComponent(effectiveName)}`,
-					{ method: 'GET' },
-				);
-				res = out.response;
-				requestBody = out.requestBody;
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : 'Could not reach Balancer API.';
-				await interaction.editReply({ content: message });
-				return;
-			}
-
-			const rawBody = await res.text();
-			const files = balancerApiJsonAttachments(requestBody, rawBody);
-			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-					...fileOpts(files),
-				});
-				return;
-			}
-
-			const body = parseJsonBody(rawBody) as ExperimentalDailyStatsBody;
-			await interaction.editReply({
-				content: formatDailyStatsReply(body),
-				...fileOpts(files),
-			});
-			return;
-		}
-
-		if (sub === 'leaderboard') {
-			const page = interaction.options.getInteger('page') ?? 1;
-			let res: Response;
-			try {
-				const out = await balancerFetch(
-					`/experimental/spec-weights/leaderboard?page=${page}&pageSize=${LEADERBOARD_PAGE_SIZE}`,
-					{ method: 'GET' },
-				);
-				res = out.response;
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : 'Could not reach Balancer API.';
-				await interaction.editReply({ content: message });
-				return;
-			}
-
-			const rawBody = await res.text();
-			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-				});
-				return;
-			}
-
-			const body = parseJsonBody(rawBody) as SpecWeightLeaderboardResponseJson;
-			const embed = specWeightLeaderboardEmbed(page, EXPERIMENTAL_SPECS_ORDERED, body);
-			await interaction.editReply({ embeds: [embed] });
-			return;
-		}
-
-		if (sub === 'spec-weights') {
-			const effectiveName = resolveOptionalPlayerName(interaction);
-			let res: Response;
-			let requestBody: string | undefined;
-			try {
-				const out = await balancerFetch(
-					`/experimental/spec-weights/${encodeURIComponent(effectiveName)}`,
-					{ method: 'GET' },
-				);
-				res = out.response;
-				requestBody = out.requestBody;
-			} catch (err) {
-				const message =
-					err instanceof Error ? err.message : 'Could not reach Balancer API.';
-				await interaction.editReply({ content: message });
-				return;
-			}
-
-			const rawBody = await res.text();
-			const files = balancerApiJsonAttachments(requestBody, rawBody);
-			if (!res.ok) {
-				await interaction.editReply({
-					content: formatFailedApiBody(res.status, rawBody),
-					...fileOpts(files),
-				});
-				return;
-			}
-
-			const body = parseJsonBody(rawBody) as Record<string, unknown>;
-			await interaction.editReply({
-				content: plainCodeBlockWithinDiscordContentLimit(formatSpecWeightsReply(body)),
-				// ...fileOpts(files),
 			});
 			return;
 		}
