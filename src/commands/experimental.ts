@@ -274,6 +274,11 @@ export const experimental = {
 		)
 		.addSubcommand((sub) =>
 			sub
+				.setName('logs-truncate-last')
+				.setDescription('Remove the 2 newest spec logs (POST /experimental/logs/truncate-last)'),
+		)
+		.addSubcommand((sub) =>
+			sub
 				.setName('logs-clear')
 				.setDescription('Clear all spec logs (POST /experimental/logs/clear)'),
 		),
@@ -452,7 +457,12 @@ export const experimental = {
 			return;
 		}
 
-		if (sub === 'logs' || sub === 'logs-truncate' || sub === 'logs-clear') {
+		if (
+			sub === 'logs' ||
+			sub === 'logs-truncate' ||
+			sub === 'logs-truncate-last' ||
+			sub === 'logs-clear'
+		) {
 			let res: Response;
 			let requestBody: string | undefined;
 			try {
@@ -461,7 +471,11 @@ export const experimental = {
 						? await balancerFetch('/experimental/logs', { method: 'GET' })
 						: sub === 'logs-truncate'
 							? await balancerFetch('/experimental/logs/truncate', { method: 'POST' })
-							: await balancerFetch('/experimental/logs/clear', { method: 'POST' });
+							: sub === 'logs-truncate-last'
+								? await balancerFetch('/experimental/logs/truncate-last', {
+										method: 'POST',
+									})
+								: await balancerFetch('/experimental/logs/clear', { method: 'POST' });
 				res = out.response;
 				requestBody = out.requestBody;
 			} catch (err) {
@@ -495,7 +509,9 @@ export const experimental = {
 					? `**${parsed.count}** logged balance(s).`
 					: sub === 'logs-truncate'
 						? `**${parsed.count}** balance(s) removed.`
-						: `**${parsed.count}** balance(s) cleared.`;
+						: sub === 'logs-truncate-last'
+							? `**${parsed.count}** balance(s) removed (latest).`
+							: `**${parsed.count}** balance(s) cleared.`;
 			await interaction.editReply({
 				content: `${prefix}`,
 				...fileOpts(files),
