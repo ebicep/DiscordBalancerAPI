@@ -47,10 +47,19 @@ type PlayerDeleteBody = {
 	tablesRemoved: string[];
 };
 
+type PlayerUuidUpdateBody = {
+	name: string;
+	oldUuid: string;
+	newUuid: string;
+	tablesUpdated: string[];
+};
+
 const PLAYER_CONFIRM = 'player:add:confirm';
 const PLAYER_CANCEL = 'player:add:cancel';
 const DELETE_CONFIRM = 'player:delete:confirm';
 const DELETE_CANCEL = 'player:delete:cancel';
+const UPDATE_CONFIRM = 'player:update:confirm';
+const UPDATE_CANCEL = 'player:update:cancel';
 
 const UUID_RE =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -137,6 +146,21 @@ function deletePreviewEmbed(get: PlayerGetBody): EmbedBuilder {
 		);
 }
 
+function updatePreviewEmbed(
+	get: PlayerGetBody,
+	newUuid: string,
+	newName?: string,
+): EmbedBuilder {
+	const newIgnLine =
+		newName !== undefined ? `New IGN: \`\`\`${newName}\`\`\`\n` : '';
+	return new EmbedBuilder()
+		.setTitle('Update Player UUID?')
+		.setColor(BALANCER_EMBED_BLUE)
+		.setDescription(
+			`Current IGN: \`\`\`${get.name}\`\`\`\nOld UUID: \`\`\`${get.uuid}\`\`\`\n${newIgnLine}New UUID: \`\`\`${newUuid}\`\`\`\n\n${formatPlayerDataSummary(get.data)}`,
+		);
+}
+
 function tablesAddedEmbed(tablesAdded: string[]): EmbedBuilder {
 	const description =
 		tablesAdded.length > 0 ? tablesAdded.join('\n') : '(none)';
@@ -151,6 +175,15 @@ function tablesRemovedEmbed(tablesRemoved: string[]): EmbedBuilder {
 		tablesRemoved.length > 0 ? tablesRemoved.join('\n') : '(none)';
 	return new EmbedBuilder()
 		.setTitle('Player Removed From')
+		.setColor(BALANCER_EMBED_BLUE)
+		.setDescription(description);
+}
+
+function tablesUpdatedEmbed(tablesUpdated: string[]): EmbedBuilder {
+	const description =
+		tablesUpdated.length > 0 ? tablesUpdated.join('\n') : '(none)';
+	return new EmbedBuilder()
+		.setTitle('Player Updated In')
 		.setColor(BALANCER_EMBED_BLUE)
 		.setDescription(description);
 }
@@ -189,6 +222,19 @@ function deleteActiveButtons(): ActionRowBuilder<ButtonBuilder> {
 			.setStyle(ButtonStyle.Success),
 		new ButtonBuilder()
 			.setCustomId(DELETE_CANCEL)
+			.setLabel('Cancel')
+			.setStyle(ButtonStyle.Danger),
+	);
+}
+
+function updateActiveButtons(): ActionRowBuilder<ButtonBuilder> {
+	return new ActionRowBuilder<ButtonBuilder>().addComponents(
+		new ButtonBuilder()
+			.setCustomId(UPDATE_CONFIRM)
+			.setLabel('Confirm')
+			.setStyle(ButtonStyle.Success),
+		new ButtonBuilder()
+			.setCustomId(UPDATE_CANCEL)
 			.setLabel('Cancel')
 			.setStyle(ButtonStyle.Danger),
 	);
@@ -418,7 +464,7 @@ async function executeDelete(interaction: ChatInputCommandInteraction): Promise<
 		new ButtonBuilder()
 			.setCustomId(`player:delete:done:${clicked.customId}`)
 			.setLabel(who)
-			.setStyle(clicked.customId === DELETE_CANCEL ? ButtonStyle.Danger : ButtonStyle.Danger)
+			.setStyle(clicked.customId === DELETE_CANCEL ? ButtonStyle.Danger : ButtonStyle.Success)
 			.setDisabled(true),
 	);
 
@@ -486,6 +532,187 @@ async function executeDelete(interaction: ChatInputCommandInteraction): Promise<
 	});
 }
 
+async function executeUpdate(interaction: ChatInputCommandInteraction): Promise<void> {
+	const oldInput = interaction.options.getString('old_player', true).trim();
+	const newInput = interaction.options.getString('new_player', true).trim();
+	if (oldInput === '' || newInput === '') {
+		await interaction.editReply({
+			content: '`old_player` and `new_player` are required.',
+		});
+		return;
+	}
+
+	const oldResolved = await resolvePlayerUuid(oldInput);
+	if (oldResolved === null) {
+		await interaction.editReply({
+			embeds: [
+				new EmbedBuilder()
+					.setTitle('Invalid Name')
+					.setColor(BALANCER_EMBED_BLUE),
+			],
+		});
+		return;
+	}
+
+	const newResolved = await resolvePlayerUuid(newInput);
+	if (newResolved === null) {
+		await interaction.editReply({
+			embeds: [
+				new EmbedBuilder()
+					.setTitle('Invalid Name')
+					.setColor(BALANCER_EMBED_BLUE),
+			],
+		});
+		return;
+	}
+
+	if (oldResolved.uuid === newResolved.uuid) {
+		await interaction.editReply({
+			content: '`old_player` and `new_player` must resolve to different UUIDs.',
+		});
+		return;
+	}
+
+	const { response: getRes } = await balancerFetch(`/player/${oldResolved.uuid}`, {
+		method: 'GET',
+	});
+	const getRawBody = await getRes.text();
+	const previewFiles = balancerApiJsonAttachments(undefined, getRawBody);
+	const previewFileOpts = previewFiles.length > 0 ? { files: previewFiles } : {};
+
+	if (!getRes.ok) {
+		if (getRes.status === 404) {
+			await interaction.editReply({
+				embeds: [
+					new EmbedBuilder()
+						.setTitle('Player Not Found')
+						.setColor(BALANCER_EMBED_BLUE),
+				],
+				...previewFileOpts,
+			});
+			return;
+		}
+		await interaction.editReply({
+			content: formatFailedApiBody(getRes.status, getRawBody),
+			...previewFileOpts,
+		});
+		return;
+	}
+
+	const playerGet = parseJsonBody(getRawBody) as PlayerGetBody;
+
+	const reply = await interaction.editReply({
+		embeds: [updatePreviewEmbed(playerGet, newResolved.uuid, newResolved.name)],
+		components: [updateActiveButtons()],
+		...previewFileOpts,
+	});
+
+	const clicked = await reply.awaitMessageComponent({
+		time: 20_000,
+		componentType: ComponentType.Button,
+		filter: (i) =>
+			(i.customId === UPDATE_CONFIRM || i.customId === UPDATE_CANCEL) &&
+			hasCoordinatorRole(i),
+	}).catch(() => null);
+
+	if (clicked === null) {
+		return;
+	}
+
+	await clicked.deferUpdate();
+	const who = truncateButtonLabel(
+		`${clicked.customId === UPDATE_CANCEL ? 'Cancel' : 'Confirm'} (${interactionMemberDisplayName(clicked)})`,
+	);
+	const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+		new ButtonBuilder()
+			.setCustomId(`player:update:done:${clicked.customId}`)
+			.setLabel(who)
+			.setStyle(clicked.customId === UPDATE_CANCEL ? ButtonStyle.Danger : ButtonStyle.Success)
+			.setDisabled(true),
+	);
+
+	await interaction.editReply({
+		embeds: [updatePreviewEmbed(playerGet, newResolved.uuid, newResolved.name)],
+		components: [disabledRow],
+		...previewFileOpts,
+	});
+
+	if (clicked.customId === UPDATE_CANCEL) {
+		return;
+	}
+
+	if (!isPublicThreadParentChannel(interaction.channel)) {
+		await interaction.followUp({
+			embeds: [cannotThreadEmbed],
+		});
+		return;
+	}
+
+	await runInReplyThread({
+		interaction,
+		starterMessage: reply,
+		threadTitle: `Update Player ${playerGet.name}`,
+		threadTitleWhenEmpty: 'Update Player',
+		logLabel: 'player update: failed to create thread or post result',
+		onNoThreadParent: async () => {
+			await interaction.followUp({
+				embeds: [cannotThreadEmbed],
+			});
+		},
+		inThread: async (thread) => {
+			const body = JSON.stringify({
+				oldUuid: oldResolved.uuid,
+				newUuid: newResolved.uuid,
+			});
+			const { response: res, requestBody } = await balancerFetch('/player/update-uuid', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body,
+			});
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			const fileOpts = files.length > 0 ? { files } : {};
+
+			if (!res.ok) {
+				if (res.status === 404) {
+					await thread.send({
+						embeds: [
+							new EmbedBuilder()
+								.setTitle('Player not found')
+								.setColor(BALANCER_EMBED_BLUE),
+						],
+						...fileOpts,
+					});
+					return;
+				}
+				if (res.status === 409) {
+					await thread.send({
+						content: formatFailedApiBody(res.status, rawBody),
+						embeds: [
+							new EmbedBuilder()
+								.setTitle('UUID update conflict')
+								.setColor(BALANCER_EMBED_BLUE),
+						],
+						...fileOpts,
+					});
+					return;
+				}
+				await thread.send({
+					content: formatFailedApiBody(res.status, rawBody),
+					...fileOpts,
+				});
+				return;
+			}
+
+			const parsed = parseJsonBody(rawBody) as PlayerUuidUpdateBody;
+			await thread.send({
+				embeds: [tablesUpdatedEmbed(parsed.tablesUpdated)],
+				...fileOpts,
+			});
+		},
+	});
+}
+
 export const player = {
 	data: new SlashCommandBuilder()
 		.setName('player')
@@ -528,6 +755,23 @@ export const player = {
 						.setDescription('Minecraft name or UUID')
 						.setRequired(true),
 				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('update')
+				.setDescription('Update player UUID (POST /player/update-uuid)')
+				.addStringOption((o) =>
+					o
+						.setName('old_player')
+						.setDescription('Current Minecraft name or UUID')
+						.setRequired(true),
+				)
+				.addStringOption((o) =>
+					o
+						.setName('new_player')
+						.setDescription('Target Minecraft name or UUID')
+						.setRequired(true),
+				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -542,6 +786,10 @@ export const player = {
 		}
 		if (sub === 'delete') {
 			await executeDelete(interaction);
+			return;
+		}
+		if (sub === 'update') {
+			await executeUpdate(interaction);
 			return;
 		}
 		await interaction.editReply({ content: `Unknown subcommand: ${sub}` });
