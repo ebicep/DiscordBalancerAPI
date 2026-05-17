@@ -39,6 +39,12 @@ import {
 } from '../util/replyThread.js';
 import { buildBalanceButtonRow } from './balanceButtons.js';
 import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
+import {
+	specWeightLeaderboardEmbed,
+	type SpecWeightLeaderboardResponseJson,
+} from '../util/leaderboardEmbed.js';
+
+const LEADERBOARD_PAGE_SIZE = 10;
 
 const fileOpts = (files: AttachmentBuilder[]) =>
 	files.length > 0 ? { files } : {};
@@ -345,6 +351,18 @@ export const experimental = {
 				.addStringOption((o) =>
 					o.setName('name').setDescription('Player name or UUID').setRequired(false),
 				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('leaderboard')
+				.setDescription('Top spec weights per class (GET /experimental/spec-weights/leaderboard)')
+				.addIntegerOption((o) =>
+					o
+						.setName('page')
+						.setDescription('Page number (default 1)')
+						.setRequired(false)
+						.setMinValue(1),
+				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -554,6 +572,36 @@ export const experimental = {
 				content: formatDailyStatsReply(body),
 				...fileOpts(files),
 			});
+			return;
+		}
+
+		if (sub === 'leaderboard') {
+			const page = interaction.options.getInteger('page') ?? 1;
+			let res: Response;
+			try {
+				const out = await balancerFetch(
+					`/experimental/spec-weights/leaderboard?page=${page}&pageSize=${LEADERBOARD_PAGE_SIZE}`,
+					{ method: 'GET' },
+				);
+				res = out.response;
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : 'Could not reach Balancer API.';
+				await interaction.editReply({ content: message });
+				return;
+			}
+
+			const rawBody = await res.text();
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+				});
+				return;
+			}
+
+			const body = parseJsonBody(rawBody) as SpecWeightLeaderboardResponseJson;
+			const embed = specWeightLeaderboardEmbed(page, EXPERIMENTAL_SPECS_ORDERED, body);
+			await interaction.editReply({ embeds: [embed] });
 			return;
 		}
 
