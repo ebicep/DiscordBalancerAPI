@@ -59,7 +59,9 @@ export function specWeightLeaderboardEmbed(
 ): EmbedBuilder {
 	const embed = new EmbedBuilder()
 		.setColor(BALANCER_EMBED_BLUE)
-		.setTitle(`Spec Weights Leaderboard (${page})`);
+		.setTitle('Spec Weights Leaderboard')
+		.setFooter({ text: `Page ${page}` })
+		.setTimestamp();
 
 	for (const spec of specsOrdered) {
 		const entries = lookupSpecEntries(body, spec);
