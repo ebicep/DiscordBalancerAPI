@@ -19,6 +19,7 @@ import {
 import { hasCoordinatorRole } from '../util/coordinatorPlayer.js';
 import { markdownPlainCodeBlock } from '../util/discordText.js';
 import { getBalanceRun, rememberBalanceRun } from '../util/balanceRunCache.js';
+import { moveBalanceTeamsToVoice } from '../util/voiceTeamMove.js';
 import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
 import {
 	EXPBAL_CANCEL,
@@ -242,6 +243,13 @@ export async function handleBalanceButton(
 			} catch (e) {
 				console.error('balance post-result channel send failed', e);
 			}
+		}
+
+		const guild = interaction.guild;
+		if (guild !== null) {
+			void moveBalanceTeamsToVoice(guild, cached.lastResponse).catch((err) =>
+				console.error('voice team move failed', err),
+			);
 		}
 		return;
 	}

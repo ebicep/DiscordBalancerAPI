@@ -99,6 +99,20 @@ export type ExperimentalBalanceResponseJson = {
 	total_off: number;
 };
 
+/** Team index 0 = Blue, 1 = Red (see TEAM_STYLES). */
+export function blueRedTeamPlayerNames(
+	data: ExperimentalBalanceResponseJson,
+): { blue: string[]; red: string[] } | null {
+	const teams = data.balance ?? [];
+	if (teams.length < 2) {
+		return null;
+	}
+	return {
+		blue: teams[0].specs.map((s) => s.name),
+		red: teams[1].specs.map((s) => s.name),
+	};
+}
+
 function specSortKey(spec: string): number {
 	const i = SPEC_SORT_ORDER.indexOf(spec);
 	return i === -1 ? 999 : i;
