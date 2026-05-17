@@ -72,6 +72,20 @@ function isDashedUuid(value: string): boolean {
 	return UUID_RE.test(value.trim());
 }
 
+function normalizePlayerUuid(input: string): string | null {
+	const trimmed = input.trim();
+	if (trimmed === '') {
+		return null;
+	}
+	if (isDashedUuid(trimmed)) {
+		return trimmed.toLowerCase();
+	}
+	if (looksLikeMojangUuid(trimmed)) {
+		return dashedUuid(trimmed.toLowerCase());
+	}
+	return null;
+}
+
 async function resolvePlayerUuid(
 	input: string,
 ): Promise<{ uuid: string; name?: string } | null> {
@@ -178,6 +192,42 @@ function deleteActiveButtons(): ActionRowBuilder<ButtonBuilder> {
 			.setLabel('Cancel')
 			.setStyle(ButtonStyle.Danger),
 	);
+}
+
+async function executeGet(interaction: ChatInputCommandInteraction): Promise<void> {
+	const uuidInput = interaction.options.getString('uuid', true).trim();
+	const uuid = normalizePlayerUuid(uuidInput);
+	if (uuid === null) {
+		await interaction.editReply({ content: 'Invalid UUID.' });
+		return;
+	}
+
+	let res: Response;
+	let requestBody: string | undefined;
+	try {
+		const out = await balancerFetch(`/player/${uuid}`, { method: 'GET' });
+		res = out.response;
+		requestBody = out.requestBody;
+	} catch (err) {
+		const message =
+			err instanceof Error ? err.message : 'Could not reach Balancer API.';
+		await interaction.editReply({ content: message });
+		return;
+	}
+
+	const rawBody = await res.text();
+	const files = balancerApiJsonAttachments(requestBody, rawBody);
+	const fileOpts = files.length > 0 ? { files } : {};
+
+	if (!res.ok) {
+		await interaction.editReply({
+			content: formatFailedApiBody(res.status, rawBody),
+			// ...fileOpts,
+		});
+		return;
+	}
+
+	await interaction.editReply(fileOpts);
 }
 
 async function executeAdd(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -459,6 +509,17 @@ export const player = {
 		)
 		.addSubcommand((sub) =>
 			sub
+				.setName('get')
+				.setDescription('Get player data (GET /player/{uuid})')
+				.addStringOption((o) =>
+					o
+						.setName('uuid')
+						.setDescription('Player UUID (with or without dashes)')
+						.setRequired(true),
+				),
+		)
+		.addSubcommand((sub) =>
+			sub
 				.setName('delete')
 				.setDescription('Delete a player (GET then DELETE /player/{uuid})')
 				.addStringOption((o) =>
@@ -471,6 +532,10 @@ export const player = {
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
 		const sub = interaction.options.getSubcommand();
+		if (sub === 'get') {
+			await executeGet(interaction);
+			return;
+		}
 		if (sub === 'add') {
 			await executeAdd(interaction);
 			return;
