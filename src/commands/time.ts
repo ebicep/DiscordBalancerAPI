@@ -152,10 +152,8 @@ export const time = {
 				});
 				return;
 			}
-			const body = parseJsonBody(rawBody);
 			await interaction.editReply({
-				content: responseJsonBlock(body),
-				...fileOpts(files),
+				content: truncateDiscordReply(rawBody),
 			});
 			return;
 		}
