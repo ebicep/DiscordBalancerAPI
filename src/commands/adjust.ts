@@ -114,6 +114,7 @@ type AutoDailyEntry = {
 
 type AutoDailyBody = {
 	count: number;
+	date?: string;
 	adjusted: AutoDailyEntry[];
 };
 
@@ -150,8 +151,11 @@ function autoDailyThreadTitle(body: AutoDailyBody): string {
 	)} [${first.previousTrajectory} > ${first.newTrajectory}]`;
 }
 
-function formatAutoDailyContent(body: AutoDailyBody): string {
-	const header = `Auto-daily applied to ${body.count} player(s).`;
+function formatAutoDailyContent(
+	body: AutoDailyBody,
+	headerPrefix = 'Auto-daily applied to',
+): string {
+	const header = `${headerPrefix} ${body.count} player(s).`;
 	const entries = body.adjusted ?? [];
 	if (entries.length === 0) {
 		return header;
@@ -183,6 +187,21 @@ export const adjust = {
 				.setName('auto-daily')
 				.setDescription(
 					'Apply auto-daily adjustments (POST /adjust/auto-daily)',
+				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('undo-auto-daily')
+				.setDescription(
+					'Undo auto-daily adjustments (POST /adjust/undo-auto-daily)',
+				)
+				.addStringOption((o) =>
+					o
+						.setName('body')
+						.setDescription(
+							'JSON body from auto-daily response (count, date, adjusted)',
+						)
+						.setRequired(true),
 				),
 		)
 		.addSubcommand((sub) =>
@@ -258,6 +277,51 @@ export const adjust = {
 			const parsed = parseJsonBody(rawBody) as AutoDailyBody;
 			await interaction.editReply({
 				content: formatAutoDailyContent(parsed),
+			});
+			await postRequestResponseArtifacts(
+				interaction,
+				files,
+				autoDailyThreadTitle(parsed),
+			);
+			return;
+		}
+
+		if (sub === 'undo-auto-daily') {
+			const bodyRaw = interaction.options.getString('body', true);
+			let parsedBody: unknown;
+			try {
+				parsedBody = JSON.parse(bodyRaw) as unknown;
+			} catch {
+				await interaction.editReply({
+					content: '`body` must be valid JSON.',
+				});
+				return;
+			}
+			const serialized = JSON.stringify(parsedBody);
+			const { response: res, requestBody } = await balancerFetch(
+				'/adjust/undo-auto-daily',
+				{
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: serialized,
+				},
+			);
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+				});
+				await postRequestResponseArtifacts(
+					interaction,
+					files,
+					`Adjust undo — HTTP ${res.status}`,
+				);
+				return;
+			}
+			const parsed = parseJsonBody(rawBody) as AutoDailyBody;
+			await interaction.editReply({
+				content: formatAutoDailyContent(parsed, 'Auto-daily undone for'),
 			});
 			await postRequestResponseArtifacts(
 				interaction,
