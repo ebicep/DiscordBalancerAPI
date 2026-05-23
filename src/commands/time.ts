@@ -7,6 +7,7 @@ import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import { truncateDiscordReply } from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
+	jsonDiscordAttachment,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
 
@@ -32,6 +33,12 @@ function responseJsonBlock(body: unknown): string {
 
 const fileOpts = (files: ReturnType<typeof balancerApiJsonAttachments>) =>
 	files.length > 0 ? { files } : {};
+
+function replyResponseJsonAttachment(rawBody: string) {
+	return {
+		files: [jsonDiscordAttachment('response.json', parseJsonBody(rawBody))],
+	};
+}
 
 export const time = {
 	data: new SlashCommandBuilder()
@@ -132,11 +139,7 @@ export const time = {
 				});
 				return;
 			}
-			const body = parseJsonBody(rawBody);
-			await interaction.editReply({
-				content: responseJsonBlock(body),
-				...fileOpts(files),
-			});
+			await interaction.editReply(replyResponseJsonAttachment(rawBody));
 			return;
 		}
 		if (sub === 'new-week') {
@@ -152,9 +155,7 @@ export const time = {
 				});
 				return;
 			}
-			await interaction.editReply({
-				content: truncateDiscordReply(rawBody),
-			});
+			await interaction.editReply(replyResponseJsonAttachment(rawBody));
 			return;
 		}
 		if (sub === 'new-season') {
