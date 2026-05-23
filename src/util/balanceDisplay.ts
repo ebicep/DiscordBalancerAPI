@@ -262,14 +262,14 @@ export function experimentalBalanceEmbeds(
 			inline: true,
 		};
 	});
-	specFields.push(balanceIdCodeBlockField(data.balance_id));
-	if (typeof threadUrl === 'string' && threadUrl.length > 0) {
-		specFields.push({
-			name: '',
-			value: `${threadUrl}`,
-			inline: false,
-		});
-	}
+	// specFields.push(balanceIdCodeBlockField(data.balance_id));
+	// if (typeof threadUrl === 'string' && threadUrl.length > 0) {
+	// 	specFields.push({
+	// 		name: '',
+	// 		value: `${threadUrl}`,
+	// 		inline: false,
+	// 	});
+	// }
 
 	const seasonString = `(S${data.meta.season})`;
 	const embed2 = new EmbedBuilder()
