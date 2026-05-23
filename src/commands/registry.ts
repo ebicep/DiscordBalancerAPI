@@ -10,6 +10,7 @@ import { experimental } from './experimental.js';
 import { experimentalDaily } from './experimentalDaily.js';
 import { experimentalDailyAll } from './experimentalDailyAll.js';
 import { experimentalWeekly } from './experimentalWeekly.js';
+import { experimentalWeeklyAll } from './experimentalWeeklyAll.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
 import { names } from './names.js';
@@ -35,6 +36,7 @@ export const commands: Command[] = [
 	experimentalDaily,
 	experimentalDailyAll,
 	experimentalWeekly,
+	experimentalWeeklyAll,
 	experimentalSpecWeights,
 	experimentalLeaderboard,
 	names,

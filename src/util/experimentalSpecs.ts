@@ -56,7 +56,10 @@ function readDailySpecEntry(entry: DailySpecStatsEntry) {
 	};
 }
 
-export function formatDailySpecsTable(body: DailyAllSpecsBody, dayId?: number): string {
+function formatAllSpecsTable(
+	body: DailyAllSpecsBody,
+	period?: { periodLabel: 'Day' | 'Week'; periodId: number },
+): string {
 	const specs = (body.specs ?? body.Specs ?? []).map(readDailySpecEntry);
 	const totalEntry = body.total ?? body.Total;
 	const rows = totalEntry ? [...specs, readDailySpecEntry(totalEntry)] : specs;
@@ -119,8 +122,22 @@ export function formatDailySpecsTable(body: DailyAllSpecsBody, dayId?: number): 
 	}
 
 	const table = output.join('\n');
-	if (dayId !== undefined) {
-		return [`Day ${dayId}`, rule, table].join('\n');
+	if (period !== undefined) {
+		return [`${period.periodLabel} ${period.periodId}`, rule, table].join('\n');
 	}
 	return table;
+}
+
+export function formatDailySpecsTable(body: DailyAllSpecsBody, dayId?: number): string {
+	return formatAllSpecsTable(
+		body,
+		dayId !== undefined ? { periodLabel: 'Day', periodId: dayId } : undefined,
+	);
+}
+
+export function formatWeeklySpecsTable(body: DailyAllSpecsBody, weekId?: number): string {
+	return formatAllSpecsTable(
+		body,
+		weekId !== undefined ? { periodLabel: 'Week', periodId: weekId } : undefined,
+	);
 }
