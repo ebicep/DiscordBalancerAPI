@@ -8,6 +8,7 @@ import { adjust } from './adjust.js';
 import { apiHealth } from './apiHealth.js';
 import { experimental } from './experimental.js';
 import { experimentalDaily } from './experimentalDaily.js';
+import { experimentalDailyAll } from './experimentalDailyAll.js';
 import { experimentalWeekly } from './experimentalWeekly.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
@@ -17,6 +18,7 @@ import { player } from './player.js';
 import { settings } from './settings.js';
 import { test } from './test.js';
 import { time } from './time.js';
+import { trajectory } from './trajectory.js';
 
 export type Command = {
 	data:
@@ -31,6 +33,7 @@ export const commands: Command[] = [
 	apiHealth,
 	experimental,
 	experimentalDaily,
+	experimentalDailyAll,
 	experimentalWeekly,
 	experimentalSpecWeights,
 	experimentalLeaderboard,
@@ -40,4 +43,5 @@ export const commands: Command[] = [
 	settings,
 	test,
 	time,
+	trajectory,
 ];
