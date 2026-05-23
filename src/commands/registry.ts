@@ -8,6 +8,7 @@ import { adjust } from './adjust.js';
 import { apiHealth } from './apiHealth.js';
 import { experimental } from './experimental.js';
 import { experimentalDaily } from './experimentalDaily.js';
+import { experimentalWeekly } from './experimentalWeekly.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
 import { names } from './names.js';
@@ -30,6 +31,7 @@ export const commands: Command[] = [
 	apiHealth,
 	experimental,
 	experimentalDaily,
+	experimentalWeekly,
 	experimentalSpecWeights,
 	experimentalLeaderboard,
 	names,
