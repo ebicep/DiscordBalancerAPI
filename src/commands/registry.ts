@@ -20,6 +20,7 @@ import { settings } from './settings.js';
 import { test } from './test.js';
 import { time } from './time.js';
 import { timecurrent } from './timecurrent.js';
+import { timehistory } from './timehistory.js';
 import { trajectory } from './trajectory.js';
 
 export type Command = {
@@ -47,5 +48,6 @@ export const commands: Command[] = [
 	test,
 	time,
 	timecurrent,
+	timehistory,
 	trajectory,
 ];
