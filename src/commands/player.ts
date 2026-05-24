@@ -81,20 +81,6 @@ function isDashedUuid(value: string): boolean {
 	return UUID_RE.test(value.trim());
 }
 
-function normalizePlayerUuid(input: string): string | null {
-	const trimmed = input.trim();
-	if (trimmed === '') {
-		return null;
-	}
-	if (isDashedUuid(trimmed)) {
-		return trimmed.toLowerCase();
-	}
-	if (looksLikeMojangUuid(trimmed)) {
-		return dashedUuid(trimmed.toLowerCase());
-	}
-	return null;
-}
-
 async function resolvePlayerUuid(
 	input: string,
 ): Promise<{ uuid: string; name?: string } | null> {
@@ -241,17 +227,16 @@ function updateActiveButtons(): ActionRowBuilder<ButtonBuilder> {
 }
 
 async function executeGet(interaction: ChatInputCommandInteraction): Promise<void> {
-	const uuidInput = interaction.options.getString('uuid', true).trim();
-	const uuid = normalizePlayerUuid(uuidInput);
-	if (uuid === null) {
-		await interaction.editReply({ content: 'Invalid UUID.' });
+	const playerInput = interaction.options.getString('player', true).trim();
+	if (playerInput === '') {
+		await interaction.editReply({ content: '`player` is required.' });
 		return;
 	}
 
 	let res: Response;
 	let requestBody: string | undefined;
 	try {
-		const out = await balancerFetch(`/player/${uuid}`, { method: 'GET' });
+		const out = await balancerFetch(`/player/${encodeURIComponent(playerInput)}`, { method: 'GET' });
 		res = out.response;
 		requestBody = out.requestBody;
 	} catch (err) {
@@ -737,11 +722,11 @@ export const player = {
 		.addSubcommand((sub) =>
 			sub
 				.setName('get')
-				.setDescription('Get player data (GET /player/{uuid})')
+				.setDescription('Get player data (GET /player/{nameOrUuid})')
 				.addStringOption((o) =>
 					o
-						.setName('uuid')
-						.setDescription('Player UUID (with or without dashes)')
+						.setName('player')
+						.setDescription('Minecraft name or UUID')
 						.setRequired(true),
 				),
 		)
