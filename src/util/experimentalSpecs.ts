@@ -19,6 +19,14 @@ export const EXPERIMENTAL_SPECS_ORDERED: readonly string[] = [
 	'Luminary',
 ] as const;
 
+export function formatSpecBansReply(body: { bans?: string[] }): string {
+	const bans = body.bans ?? [];
+	if (bans.length === 0) {
+		return 'Banned Specs:';
+	}
+	return `Banned Specs:\n${bans.map((s) => `- ${s}`).join('\n')}`;
+}
+
 export function formatSpecWeightsReply(body: Record<string, unknown>): string {
 	return EXPERIMENTAL_SPECS_ORDERED.map((spec) => {
 		const v = body[spec] ?? body[spec.toLowerCase()];
