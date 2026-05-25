@@ -1,13 +1,10 @@
-import { type AttachmentBuilder, type ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
+import { type ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import { resolveOptionalPlayerName } from '../util/coordinatorPlayer.js';
 import { EXPERIMENTAL_SPECS_ORDERED } from '../util/experimentalSpecs.js';
-import { balancerApiJsonAttachments, parseJsonBody } from '../util/jsonDiscordAttachment.js';
-
-const fileOpts = (files: AttachmentBuilder[]) =>
-	files.length > 0 ? { files } : {};
+import { parseJsonBody } from '../util/jsonDiscordAttachment.js';
 
 export const requestSpec = {
 	data: new SlashCommandBuilder()
@@ -31,7 +28,7 @@ export const requestSpec = {
 		const effectiveName = resolveOptionalPlayerName(interaction);
 		const spec = interaction.options.getString('spec', true);
 
-		const { response: res, requestBody } = await balancerFetch(
+		const { response: res } = await balancerFetch(
 			`/experimental/request-spec/${encodeURIComponent(effectiveName)}`,
 			{
 				method: 'POST',
@@ -41,11 +38,9 @@ export const requestSpec = {
 		);
 
 		const rawBody = await res.text();
-		const files = balancerApiJsonAttachments(requestBody, rawBody);
 		if (!res.ok) {
 			await interaction.editReply({
 				content: formatFailedApiBody(res.status, rawBody),
-				...fileOpts(files),
 			});
 			return;
 		}
@@ -58,7 +53,6 @@ export const requestSpec = {
 		const cooldown = body.game_cooldown ?? 5;
 		await interaction.editReply({
 			content: `Spec request saved: **${specName}** (cooldown: ${cooldown} game(s) until priority applies).`,
-			...fileOpts(files),
 		});
 	},
 };
