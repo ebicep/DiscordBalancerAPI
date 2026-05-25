@@ -14,6 +14,7 @@ import { experimentalWeeklyAll } from './experimentalWeeklyAll.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
 import { experimentalSpecBans } from './experimentalSpecBans.js';
+import { requestSpec } from './requestSpec.js';
 import { names } from './names.js';
 import { ping } from './ping.js';
 import { player } from './player.js';
@@ -42,6 +43,7 @@ export const commands: Command[] = [
 	experimentalWeeklyAll,
 	experimentalSpecWeights,
 	experimentalSpecBans,
+	requestSpec,
 	experimentalLeaderboard,
 	names,
 	ping,

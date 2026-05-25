@@ -68,6 +68,7 @@ export type ExperimentalBalancePlayerSpecJson = {
 	win_loss: number;
 	net_kd_per_game: number;
 	off: boolean;
+	requested?: boolean;
 };
 
 export type ExperimentalBalanceTeamJson = {
