@@ -10,9 +10,9 @@ import {
 } from '../util/experimentalSpecs.js';
 import { parseJsonBody } from '../util/jsonDiscordAttachment.js';
 
-export const experimentalDailyAll = {
+export const experimentalDailySpecs = {
 	data: new SlashCommandBuilder()
-		.setName('daily-experimental-all')
+		.setName('daily-experimental-specs')
 		.setDescription(
 			"Today's per-spec W/L/K/D for a player; optional day id for a completed historical day",
 		)
@@ -31,8 +31,8 @@ export const experimentalDailyAll = {
 		const dayId = interaction.options.getInteger('id');
 		const path =
 			dayId === null
-				? `/experimental/daily-experimental-all/${encodeURIComponent(effectiveName)}`
-				: `/experimental/daily-experimental-all/${encodeURIComponent(effectiveName)}?id=${dayId}`;
+				? `/experimental/daily-experimental-specs/${encodeURIComponent(effectiveName)}`
+				: `/experimental/daily-experimental-specs/${encodeURIComponent(effectiveName)}?id=${dayId}`;
 		let res: Response;
 		try {
 			const out = await balancerFetch(path, { method: 'GET' });

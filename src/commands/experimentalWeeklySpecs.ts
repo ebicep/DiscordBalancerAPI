@@ -10,9 +10,9 @@ import {
 } from '../util/experimentalSpecs.js';
 import { parseJsonBody } from '../util/jsonDiscordAttachment.js';
 
-export const experimentalWeeklyAll = {
+export const experimentalWeeklySpecs = {
 	data: new SlashCommandBuilder()
-		.setName('weekly-experimental-all')
+		.setName('weekly-experimental-specs')
 		.setDescription(
 			"This week's per-spec W/L/K/D for a player; optional week id for a completed historical week",
 		)
@@ -31,8 +31,8 @@ export const experimentalWeeklyAll = {
 		const weekId = interaction.options.getInteger('id');
 		const path =
 			weekId === null
-				? `/experimental/weekly-experimental-all/${encodeURIComponent(effectiveName)}`
-				: `/experimental/weekly-experimental-all/${encodeURIComponent(effectiveName)}?id=${weekId}`;
+				? `/experimental/weekly-experimental-specs/${encodeURIComponent(effectiveName)}`
+				: `/experimental/weekly-experimental-specs/${encodeURIComponent(effectiveName)}?id=${weekId}`;
 		let res: Response;
 		try {
 			const out = await balancerFetch(path, { method: 'GET' });

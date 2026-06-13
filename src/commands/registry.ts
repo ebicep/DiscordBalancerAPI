@@ -8,9 +8,9 @@ import { adjust } from './adjust.js';
 import { apiHealth } from './apiHealth.js';
 import { experimental } from './experimental.js';
 import { experimentalDaily } from './experimentalDaily.js';
-import { experimentalDailyAll } from './experimentalDailyAll.js';
+import { experimentalDailySpecs } from './experimentalDailySpecs.js';
 import { experimentalWeekly } from './experimentalWeekly.js';
-import { experimentalWeeklyAll } from './experimentalWeeklyAll.js';
+import { experimentalWeeklySpecs } from './experimentalWeeklySpecs.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
 import { experimentalSpecBans } from './experimentalSpecBans.js';
@@ -38,9 +38,9 @@ export const commands: Command[] = [
 	apiHealth,
 	experimental,
 	experimentalDaily,
-	experimentalDailyAll,
+	experimentalDailySpecs,
 	experimentalWeekly,
-	experimentalWeeklyAll,
+	experimentalWeeklySpecs,
 	experimentalSpecWeights,
 	experimentalSpecBans,
 	requestSpec,
