@@ -283,6 +283,106 @@ export function experimentalBalanceEmbeds(
 	return [embed1, embed2];
 }
 
+// --- Regular balance (no spec assignment) ---
+
+export type RegularBalancePlayerJson = {
+	uuid: string;
+	name: string;
+	weight: number;
+	talker: number;
+	win_loss: number;
+	net_kd_per_game: number;
+};
+
+export type RegularBalanceTeamJson = {
+	total_weight: number;
+	total_talkers: number;
+	total_win_loss: number;
+	total_net_kd_per_game: number;
+	players: RegularBalancePlayerJson[];
+};
+
+export type RegularBalanceResponseJson = {
+	balance_id: string;
+	balance: RegularBalanceTeamJson[];
+	meta: ExperimentalBalanceMetaJson;
+};
+
+export function parseRegularBalanceResponse(raw: unknown): RegularBalanceResponseJson | null {
+	if (raw === null || typeof raw !== 'object') return null;
+	const o = raw as Record<string, unknown>;
+	if (typeof o.balance_id !== 'string') return null;
+	if (!Array.isArray(o.balance)) return null;
+	const meta = o.meta;
+	if (meta === null || typeof meta !== 'object') return null;
+	const m = meta as Record<string, unknown>;
+	if (
+		typeof m.iterations !== 'number' ||
+		typeof m.durationMs !== 'number' ||
+		typeof m.season !== 'number' ||
+		typeof m.time !== 'string' ||
+		!Array.isArray(m.steps)
+	) return null;
+
+	const normalizedBalance: RegularBalanceTeamJson[] = [];
+	for (const item of o.balance) {
+		if (item === null || typeof item !== 'object') return null;
+		const t = item as Record<string, unknown>;
+		if (!Array.isArray(t.players)) return null;
+		normalizedBalance.push(t as unknown as RegularBalanceTeamJson);
+	}
+
+	return {
+		balance_id: o.balance_id,
+		balance: normalizedBalance,
+		meta: m as unknown as ExperimentalBalanceMetaJson,
+	};
+}
+
+export function regularBalanceEmbeds(data: RegularBalanceResponseJson): import('discord.js').EmbedBuilder[] {
+	const teams = data.balance ?? [];
+	const title = formatBalanceEmbedTitle(data.meta);
+	const footerPrimary = formatBalancePrimaryFooter(data.meta);
+
+	if (teams.length === 0) {
+		const e = new EmbedBuilder()
+			.setTitle(title)
+			.setDescription(`balance_id: \`${data.balance_id}\`\n_No teams in response._`)
+			.setColor(BALANCER_EMBED_BLUE)
+			.setFooter({ text: footerPrimary });
+		return [e];
+	}
+
+	const chromeColor = styleForTeamIndex(0).embedColor;
+
+	const fields = teams.map((team, index) => {
+		const label = styleForTeamIndex(index).displayName;
+		const sorted = [...team.players].sort((a, b) => b.weight - a.weight);
+		const lines = sorted.map((p) => `${p.name} (${p.weight}:${p.win_loss})`).join('\n');
+		const kd = Number.isFinite(team.total_net_kd_per_game)
+			? team.total_net_kd_per_game.toFixed(2)
+			: String(team.total_net_kd_per_game);
+		const header = `**__${label} Team__** - ${team.total_weight}  |  ${team.total_win_loss}  |  ${kd}`;
+		return { name: header, value: markdownPlainCodeBlock(lines), inline: false };
+	});
+
+	fields.push({
+		name: '',
+		value: markdownPlainCodeBlock(data.balance_id),
+		inline: false,
+	});
+
+	const seasonString = `(S${data.meta.season})`;
+	const embed = new EmbedBuilder()
+		.setTitle(title)
+		.setColor(chromeColor)
+		.addFields(fields)
+		.setFooter({ text: `Result ${seasonString}: TBD  |  ${footerPrimary}` })
+		.setTimestamp();
+
+	return [embed];
+}
+
 export function parseExperimentalBalanceResponse(
 	raw: unknown,
 ): ExperimentalBalanceResponseJson | null {
