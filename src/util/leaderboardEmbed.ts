@@ -74,3 +74,41 @@ export function specWeightLeaderboardEmbed(
 
 	return embed;
 }
+
+export type BaseWeightLeaderboardEntryJson = {
+	uuid?: string;
+	name?: string;
+	'base-weight'?: number;
+};
+
+export function baseWeightLeaderboardEmbed(
+	page: number,
+	entries: BaseWeightLeaderboardEntryJson[],
+): EmbedBuilder {
+	const maxDescLen = 4096;
+	const overhead = 8;
+
+	let inner: string;
+	if (entries.length === 0) {
+		inner = '(none)';
+	} else {
+		const skip = (page - 1) * 25;
+		const lines = entries.map((e, i) => {
+			const rank = skip + i + 1;
+			const name = e.name ?? '?';
+			const weight = e['base-weight'] ?? 0;
+			return `${rank}. ${name} - ${weight}`;
+		});
+		inner = lines.join('\n');
+		if (inner.length > maxDescLen - overhead) {
+			inner = inner.slice(0, maxDescLen - overhead - 1) + '…';
+		}
+	}
+
+	return new EmbedBuilder()
+		.setColor(BALANCER_EMBED_BLUE)
+		.setTitle('Base Weights Leaderboard')
+		.setDescription(`\`\`\`\n${inner}\n\`\`\``)
+		.setFooter({ text: `Page ${page}` })
+		.setTimestamp();
+}

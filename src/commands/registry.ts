@@ -13,6 +13,7 @@ import { experimentalDailySpecs } from './experimentalDailySpecs.js';
 import { experimentalWeekly } from './experimentalWeekly.js';
 import { experimentalWeeklyAll } from './experimentalWeeklyAll.js';
 import { experimentalWeeklySpecs } from './experimentalWeeklySpecs.js';
+import { baseLeaderboard } from './baseLeaderboard.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
 import { experimentalSpecBans } from './experimentalSpecBans.js';
@@ -49,6 +50,7 @@ export const commands: Command[] = [
 	experimentalSpecWeights,
 	experimentalSpecBans,
 	requestSpec,
+	baseLeaderboard,
 	experimentalLeaderboard,
 	names,
 	ping,
