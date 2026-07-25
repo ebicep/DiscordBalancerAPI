@@ -371,6 +371,7 @@ export const experimental = {
 					interaction.user.id,
 					players,
 					parsed,
+					'experimental',
 				);
 				return;
 			}
@@ -402,6 +403,7 @@ export const experimental = {
 						interaction.user.id,
 						players,
 						parsed,
+						'experimental',
 					);
 				},
 			});

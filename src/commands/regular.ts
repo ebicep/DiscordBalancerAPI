@@ -1,15 +1,13 @@
 import {
 	type ChatInputCommandInteraction,
+	type GuildTextBasedChannel,
 	MessageFlags,
 	SlashCommandBuilder,
 	ThreadChannel,
 } from 'discord.js';
 
 import { balancerFetch } from '../api/balancerApi.js';
-import {
-	extractProblemDetailFromParsedJson,
-	formatFailedApiBody,
-} from '../util/apiErrorMessage.js';
+import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
@@ -18,11 +16,13 @@ import {
 	regularBalanceEmbeds,
 	parseRegularBalanceResponse,
 } from '../util/balanceDisplay.js';
+import { rememberBalanceRun } from '../util/balanceRunCache.js';
 import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
 	sendBalancerFilesToThread,
 } from '../util/replyThread.js';
+import { buildBalanceButtonRow } from './balanceButtons.js';
 import { parsePlayersString } from './experimental.js';
 
 const fileOpts = (files: import('discord.js').AttachmentBuilder[]) =>
@@ -143,13 +143,26 @@ export const regular = {
 			await interaction.editReply({ content: `\`\`\`\n${playersRaw}\n\`\`\`` });
 			const starterMsg = await interaction.fetchReply();
 
-			const postInChannel = async (target: import('discord.js').GuildTextBasedChannel | ThreadChannel) => {
-				return target.send({ embeds, ...fileOpts(files) });
+			const postBalanceInChannel = async (
+				target: GuildTextBasedChannel | ThreadChannel,
+			) => {
+				return target.send({
+					embeds,
+					components: [buildBalanceButtonRow(parsed.balance_id)],
+					...fileOpts(files),
+				});
 			};
 
 			const ch = interaction.channel;
 			if (ch instanceof ThreadChannel) {
-				await postInChannel(ch);
+				const threadMsg = await postBalanceInChannel(ch);
+				rememberBalanceRun(
+					threadMsg.id,
+					interaction.user.id,
+					players,
+					parsed,
+					'regular',
+				);
 				return;
 			}
 
@@ -172,7 +185,14 @@ export const regular = {
 					});
 				},
 				inThread: async (thread) => {
-					await postInChannel(thread);
+					const threadMsg = await postBalanceInChannel(thread);
+					rememberBalanceRun(
+						threadMsg.id,
+						interaction.user.id,
+						players,
+						parsed,
+						'regular',
+					);
 				},
 			});
 		}

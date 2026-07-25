@@ -102,16 +102,30 @@ export type ExperimentalBalanceResponseJson = {
 
 /** Team index 0 = Blue, 1 = Red (see TEAM_STYLES). */
 export function blueRedTeamPlayerNames(
-	data: ExperimentalBalanceResponseJson,
+	data: ExperimentalBalanceResponseJson | RegularBalanceResponseJson,
 ): { blue: string[]; red: string[] } | null {
 	const teams = data.balance ?? [];
 	if (teams.length < 2) {
 		return null;
 	}
-	return {
-		blue: teams[0].specs.map((s) => s.name),
-		red: teams[1].specs.map((s) => s.name),
-	};
+	const blueTeam = teams[0];
+	const redTeam = teams[1];
+	if (blueTeam === undefined || redTeam === undefined) {
+		return null;
+	}
+	if ('specs' in blueTeam && 'specs' in redTeam) {
+		return {
+			blue: blueTeam.specs.map((s) => s.name),
+			red: redTeam.specs.map((s) => s.name),
+		};
+	}
+	if ('players' in blueTeam && 'players' in redTeam) {
+		return {
+			blue: blueTeam.players.map((p) => p.name),
+			red: redTeam.players.map((p) => p.name),
+		};
+	}
+	return null;
 }
 
 function specSortKey(spec: string): number {
@@ -119,10 +133,14 @@ function specSortKey(spec: string): number {
 	return i === -1 ? 999 : i;
 }
 
-function formatBalanceEmbedTitle(meta: ExperimentalBalanceMetaJson): string {
+function formatBalanceEmbedTitle(
+	meta: ExperimentalBalanceMetaJson,
+	options?: { appendStar?: boolean },
+): string {
 	const d = new Date(meta.time);
 	const when = !Number.isNaN(d.getTime()) ? d : new Date();
-	return `${String(when)}*`;
+	const base = String(when);
+	return options?.appendStar === false ? base : `${base}*`;
 }
 
 function formatPlayerLineDetailed(p: ExperimentalBalancePlayerSpecJson): string {
@@ -339,9 +357,14 @@ export function parseRegularBalanceResponse(raw: unknown): RegularBalanceRespons
 	};
 }
 
-export function regularBalanceEmbeds(data: RegularBalanceResponseJson): import('discord.js').EmbedBuilder[] {
+export function regularBalanceEmbeds(
+	data: RegularBalanceResponseJson,
+	threadUrl?: string,
+	options?: { variant?: 'detail' | 'result' },
+): import('discord.js').EmbedBuilder[] {
+	const variant = options?.variant ?? 'detail';
 	const teams = data.balance ?? [];
-	const title = formatBalanceEmbedTitle(data.meta);
+	const title = formatBalanceEmbedTitle(data.meta, { appendStar: false });
 	const footerPrimary = formatBalancePrimaryFooter(data.meta);
 
 	if (teams.length === 0) {
@@ -358,7 +381,13 @@ export function regularBalanceEmbeds(data: RegularBalanceResponseJson): import('
 	const fields = teams.map((team, index) => {
 		const label = styleForTeamIndex(index).displayName;
 		const sorted = [...team.players].sort((a, b) => b.weight - a.weight);
-		const lines = sorted.map((p) => `${p.name} (${p.weight}:${p.win_loss})`).join('\n');
+		const lines = sorted
+			.map((p) =>
+				variant === 'result'
+					? p.name
+					: `${p.name} (${p.weight}:${p.win_loss})`,
+			)
+			.join('\n');
 		const kd = Number.isFinite(team.total_net_kd_per_game)
 			? team.total_net_kd_per_game.toFixed(2)
 			: String(team.total_net_kd_per_game);
@@ -371,6 +400,13 @@ export function regularBalanceEmbeds(data: RegularBalanceResponseJson): import('
 		value: markdownPlainCodeBlock(data.balance_id),
 		inline: false,
 	});
+	if (typeof threadUrl === 'string' && threadUrl.length > 0) {
+		fields.push({
+			name: '',
+			value: `${threadUrl}`,
+			inline: false,
+		});
+	}
 
 	const seasonString = `(S${data.meta.season})`;
 	const embed = new EmbedBuilder()

@@ -1,9 +1,15 @@
-import type { ExperimentalBalanceResponseJson } from './balanceDisplay.js';
+import type {
+	ExperimentalBalanceResponseJson,
+	RegularBalanceResponseJson,
+} from './balanceDisplay.js';
+
+export type BalanceRunKind = 'experimental' | 'regular';
 
 export type BalanceRunCacheEntry = {
+	kind: BalanceRunKind;
 	userId: string;
 	players: string[];
-	lastResponse: ExperimentalBalanceResponseJson;
+	lastResponse: ExperimentalBalanceResponseJson | RegularBalanceResponseJson;
 };
 
 const TTL_MS = 15 * 60 * 1000;
@@ -25,11 +31,12 @@ export function rememberBalanceRun(
 	messageId: string,
 	userId: string,
 	players: string[],
-	lastResponse: ExperimentalBalanceResponseJson,
+	lastResponse: ExperimentalBalanceResponseJson | RegularBalanceResponseJson,
+	kind: BalanceRunKind,
 ): void {
 	pruneExpired();
 	byMessageId.set(messageId, {
-		entry: { userId, players, lastResponse },
+		entry: { kind, userId, players, lastResponse },
 		expiresAt: Date.now() + TTL_MS,
 	});
 }

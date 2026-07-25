@@ -15,10 +15,19 @@ import {
 	experimentalBalanceEmbeds,
 	experimentalRepeatSpecWarningEmbed,
 	parseExperimentalBalanceResponse,
+	parseRegularBalanceResponse,
+	regularBalanceEmbeds,
+	type ExperimentalBalanceResponseJson,
+	type RegularBalanceResponseJson,
 } from '../util/balanceDisplay.js';
 import { hasCoordinatorRole } from '../util/coordinatorPlayer.js';
 import { markdownPlainCodeBlock } from '../util/discordText.js';
-import { getBalanceRun, rememberBalanceRun } from '../util/balanceRunCache.js';
+import {
+	getBalanceRun,
+	rememberBalanceRun,
+	type BalanceRunCacheEntry,
+	type BalanceRunKind,
+} from '../util/balanceRunCache.js';
 import { moveBalanceTeamsToVoice } from '../util/voiceTeamMove.js';
 import { BALANCE_POST_RESULT_CHANNEL_ID } from './balanceConstants.js';
 import {
@@ -42,6 +51,56 @@ async function editBalanceButtons(
 	await interaction.message.edit({ components });
 }
 
+function balancePath(kind: BalanceRunKind): string {
+	return kind === 'regular' ? '/regular/balance' : '/experimental/balance';
+}
+
+function parseBalanceResponse(
+	kind: BalanceRunKind,
+	raw: unknown,
+): ExperimentalBalanceResponseJson | RegularBalanceResponseJson | null {
+	return kind === 'regular'
+		? parseRegularBalanceResponse(raw)
+		: parseExperimentalBalanceResponse(raw);
+}
+
+function buildRebalEmbeds(
+	kind: BalanceRunKind,
+	parsed: ExperimentalBalanceResponseJson | RegularBalanceResponseJson,
+): import('discord.js').EmbedBuilder[] {
+	if (kind === 'regular') {
+		return regularBalanceEmbeds(parsed as RegularBalanceResponseJson);
+	}
+	const embeds = experimentalBalanceEmbeds(
+		parsed as ExperimentalBalanceResponseJson,
+	);
+	const warnEmbed = experimentalRepeatSpecWarningEmbed(
+		parsed as ExperimentalBalanceResponseJson,
+	);
+	const first = embeds[0];
+	if (first === undefined) {
+		return [];
+	}
+	return warnEmbed !== null ? [first, warnEmbed] : [first];
+}
+
+function resultChannelEmbed(
+	cached: BalanceRunCacheEntry,
+	threadUrl: string | undefined,
+): import('discord.js').EmbedBuilder | undefined {
+	if (cached.kind === 'regular') {
+		return regularBalanceEmbeds(
+			cached.lastResponse as RegularBalanceResponseJson,
+			threadUrl,
+			{ variant: 'result' },
+		)[0];
+	}
+	return experimentalBalanceEmbeds(
+		cached.lastResponse as ExperimentalBalanceResponseJson,
+		threadUrl,
+	)[1];
+}
+
 export async function handleBalanceButton(
 	interaction: ButtonInteraction,
 ): Promise<void> {
@@ -59,6 +118,7 @@ export async function handleBalanceButton(
 	}
 
 	const id = interaction.customId;
+	const { kind } = cached;
 
 	if (id === EXPBAL_CANCEL) {
 		await interaction.deferUpdate();
@@ -75,7 +135,7 @@ export async function handleBalanceButton(
 		]);
 		const body = JSON.stringify({ players: cached.players });
 		const { response: res, requestBody } = await balancerFetch(
-			'/experimental/balance',
+			balancePath(kind),
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
@@ -96,7 +156,7 @@ export async function handleBalanceButton(
 			return;
 		}
 		const parsedUnknown = parseJsonBody(rawBody);
-		const parsed = parseExperimentalBalanceResponse(parsedUnknown);
+		const parsed = parseBalanceResponse(kind, parsedUnknown);
 		if (parsed === null) {
 			await editBalanceButtons(interaction, [
 				buildBalanceButtonRow(cached.lastResponse.balance_id),
@@ -108,10 +168,8 @@ export async function handleBalanceButton(
 			});
 			return;
 		}
-		const embeds = experimentalBalanceEmbeds(parsed);
-		const warnEmbed = experimentalRepeatSpecWarningEmbed(parsed);
-		const first = embeds[0];
-		if (first === undefined) {
+		const balanceEmbeds = buildRebalEmbeds(kind, parsed);
+		if (balanceEmbeds[0] === undefined) {
 			await editBalanceButtons(interaction, [
 				buildBalanceButtonRow(cached.lastResponse.balance_id),
 			]);
@@ -138,7 +196,6 @@ export async function handleBalanceButton(
 		}
 		let newMsg;
 		try {
-			const balanceEmbeds = warnEmbed !== null ? [first, warnEmbed] : [first];
 			newMsg = await sendTarget.send({
 				embeds: balanceEmbeds,
 				components: [buildBalanceButtonRow(parsed.balance_id)],
@@ -155,7 +212,13 @@ export async function handleBalanceButton(
 			});
 			return;
 		}
-		rememberBalanceRun(newMsg.id, cached.userId, cached.players, parsed);
+		rememberBalanceRun(
+			newMsg.id,
+			cached.userId,
+			cached.players,
+			parsed,
+			kind,
+		);
 		return;
 	}
 
@@ -169,31 +232,39 @@ export async function handleBalanceButton(
 			return;
 		}
 		await interaction.deferUpdate();
-		const { response: res, requestBody } = await balancerFetch(
-			`/experimental/balance/${balanceId}/confirm`,
-			{ method: 'POST' },
-		);
-		const rawBody = await res.text();
-		const files = balancerApiJsonAttachments(requestBody, rawBody);
-		if (!res.ok) {
-			await interaction.followUp({
-				content: formatFailedApiBody(res.status, rawBody),
-				flags: MessageFlags.Ephemeral,
-				...fileOpts(files),
-			});
-			return;
+
+		let files: ReturnType<typeof balancerApiJsonAttachments> = [];
+		let postedBalanceId = balanceId;
+
+		if (kind === 'experimental') {
+			const { response: res, requestBody } = await balancerFetch(
+				`/experimental/balance/${balanceId}/confirm`,
+				{ method: 'POST' },
+			);
+			const rawBody = await res.text();
+			files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.followUp({
+					content: formatFailedApiBody(res.status, rawBody),
+					flags: MessageFlags.Ephemeral,
+					...fileOpts(files),
+				});
+				return;
+			}
+			const parsedConfirm = parseJsonBody(rawBody);
+			if (parsedConfirm !== null && typeof parsedConfirm === 'object') {
+				const confirmId = (parsedConfirm as Record<string, unknown>)
+					.balance_id;
+				if (typeof confirmId === 'string' && confirmId.trim().length > 0) {
+					postedBalanceId = confirmId.trim();
+				}
+			}
 		}
+
 		await editBalanceButtons(interaction, [
 			buildPostedBalanceRow(balanceActorDisplayName(interaction)),
 		]);
-		const parsedConfirm = parseJsonBody(rawBody);
-		let postedBalanceId = balanceId;
-		if (parsedConfirm !== null && typeof parsedConfirm === 'object') {
-			const id = (parsedConfirm as Record<string, unknown>).balance_id;
-			if (typeof id === 'string' && id.trim().length > 0) {
-				postedBalanceId = id.trim();
-			}
-		}
+
 		const channel = interaction.channel;
 		if (
 			channel !== null &&
@@ -214,15 +285,14 @@ export async function handleBalanceButton(
 			interaction.guildId !== null
 				? `https://discord.com/channels/${interaction.guildId}/${interaction.channelId}`
 				: undefined;
-		const pair = experimentalBalanceEmbeds(cached.lastResponse, threadUrl);
-		const second = pair[1];
-		if (second !== undefined) {
+		const resultEmbed = resultChannelEmbed(cached, threadUrl);
+		if (resultEmbed !== undefined) {
 			try {
 				const target = await interaction.client.channels.fetch(
 					BALANCE_POST_RESULT_CHANNEL_ID,
 				);
 				if (target !== null && target.isTextBased() && !target.isDMBased()) {
-					const postedMessage = await target.send({ embeds: [second] });
+					const postedMessage = await target.send({ embeds: [resultEmbed] });
 					const originChannel = interaction.channel;
 					if (
 						originChannel !== null &&

@@ -8,6 +8,7 @@ import {
 import {
 	blueRedTeamPlayerNames,
 	type ExperimentalBalanceResponseJson,
+	type RegularBalanceResponseJson,
 } from './balanceDisplay.js';
 
 const BLUE_VOICE_CHANNEL_NAME = '🔵';
@@ -59,7 +60,7 @@ async function moveNamesToChannel(
 
 export async function moveBalanceTeamsToVoice(
 	guild: Guild,
-	response: ExperimentalBalanceResponseJson,
+	response: ExperimentalBalanceResponseJson | RegularBalanceResponseJson,
 ): Promise<void> {
 	try {
 		const teams = blueRedTeamPlayerNames(response);
