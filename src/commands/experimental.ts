@@ -221,6 +221,11 @@ export const experimental = {
 						.setName('body')
 						.setDescription('JSON body (winners, losers, game_id)')
 						.setRequired(true),
+				)
+				.addBooleanOption((o) =>
+					o
+						.setName('uncount')
+						.setDescription('Record stats without affecting adjustments/weights'),
 				),
 		)
 		.addSubcommand((sub) =>
@@ -524,6 +529,7 @@ export const experimental = {
 		if (sub === 'input') {
 			const balanceId = interaction.options.getString('balance_id', true).trim();
 			const bodyRaw = interaction.options.getString('body', true);
+			const uncount = interaction.options.getBoolean('uncount') ?? false;
 			if (!isUuid(balanceId)) {
 				await interaction.editReply({
 					content: '`balance_id` must be a valid UUID.',
@@ -541,7 +547,7 @@ export const experimental = {
 			}
 			const serialized = JSON.stringify(parsedBody);
 			const { response: res, requestBody } = await balancerFetch(
-				`/experimental/balance/${balanceId}/input`,
+				`/experimental/balance/${balanceId}/input${uncount ? '?uncount=true' : ''}`,
 				{
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
