@@ -39,7 +39,7 @@ function formatWl(wins: number, losses: number): string {
 
 function formatAllStatsTable(
 	body: AllPlayerStatsBody,
-	period?: { periodLabel: 'Day' | 'Week'; periodId: number },
+	period?: { periodLabel: 'Day' | 'Week' | 'Season'; periodId: number },
 ): string {
 	const players = (body.players ?? body.Players ?? [])
 		.map(readPlayerEntry)
@@ -110,5 +110,12 @@ export function formatWeeklyAllStatsTable(body: AllPlayerStatsBody, weekId?: num
 	return formatAllStatsTable(
 		body,
 		weekId !== undefined ? { periodLabel: 'Week', periodId: weekId } : undefined,
+	);
+}
+
+export function formatSeasonAllStatsTable(body: AllPlayerStatsBody, seasonId?: number): string {
+	return formatAllStatsTable(
+		body,
+		seasonId !== undefined ? { periodLabel: 'Season', periodId: seasonId } : undefined,
 	);
 }

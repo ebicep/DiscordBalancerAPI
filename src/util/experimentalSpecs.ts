@@ -66,7 +66,7 @@ function readDailySpecEntry(entry: DailySpecStatsEntry) {
 
 function formatAllSpecsTable(
 	body: DailyAllSpecsBody,
-	period?: { periodLabel: 'Day' | 'Week'; periodId: number },
+	period?: { periodLabel: 'Day' | 'Week' | 'Season'; periodId: number },
 ): string {
 	const specs = (body.specs ?? body.Specs ?? []).map(readDailySpecEntry);
 	const totalEntry = body.total ?? body.Total;
@@ -147,5 +147,12 @@ export function formatWeeklySpecsTable(body: DailyAllSpecsBody, weekId?: number)
 	return formatAllSpecsTable(
 		body,
 		weekId !== undefined ? { periodLabel: 'Week', periodId: weekId } : undefined,
+	);
+}
+
+export function formatSeasonSpecsTable(body: DailyAllSpecsBody, seasonId?: number): string {
+	return formatAllSpecsTable(
+		body,
+		seasonId !== undefined ? { periodLabel: 'Season', periodId: seasonId } : undefined,
 	);
 }
