@@ -3,7 +3,7 @@ import { type ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.j
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import { resolveOptionalPlayerName } from '../util/coordinatorPlayer.js';
-import { plainCodeBlockWithinDiscordContentLimit } from '../util/discordText.js';
+import { replyWithPlainCodeBlockChunks } from '../util/discordText.js';
 import {
 	type DailyAllSpecsBody,
 	formatDailySpecsTable,
@@ -54,8 +54,6 @@ export const experimentalDailySpecs = {
 
 		const body = parseJsonBody(rawBody) as DailyAllSpecsBody;
 		const table = formatDailySpecsTable(body, dayId ?? undefined);
-		await interaction.editReply({
-			content: plainCodeBlockWithinDiscordContentLimit(table),
-		});
+		await replyWithPlainCodeBlockChunks(interaction, table);
 	},
 };

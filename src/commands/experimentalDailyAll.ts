@@ -2,7 +2,7 @@ import { type ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.j
 
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
-import { plainCodeBlockWithinDiscordContentLimit } from '../util/discordText.js';
+import { replyWithPlainCodeBlockChunks } from '../util/discordText.js';
 import {
 	type AllPlayerStatsBody,
 	formatDailyAllStatsTable,
@@ -47,8 +47,6 @@ export const experimentalDailyAll = {
 
 		const body = parseJsonBody(rawBody) as AllPlayerStatsBody;
 		const table = formatDailyAllStatsTable(body, dayId ?? undefined);
-		await interaction.editReply({
-			content: plainCodeBlockWithinDiscordContentLimit(table),
-		});
+		await replyWithPlainCodeBlockChunks(interaction, table);
 	},
 };

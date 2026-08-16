@@ -1,4 +1,8 @@
-import { GuildMember, type User } from 'discord.js';
+import {
+	GuildMember,
+	type ChatInputCommandInteraction,
+	type User,
+} from 'discord.js';
 
 import {
 	BUTTON_LABEL_MAX,
@@ -114,6 +118,76 @@ export function plainCodeBlockWithinDiscordContentLimit(inner: string): string {
 	}
 
 	return `${MARKDOWN_PLAIN_CODE_OPEN}${body}${CODE_BLOCK_BODY_TRUNCATION_SUFFIX}${MARKDOWN_PLAIN_CODE_CLOSE}`;
+}
+
+/**
+ * Split `inner` into one or more plain code-fence messages, each within
+ * {@link DISCORD_MESSAGE_CONTENT_MAX}. Packs whole lines when possible; hard-slices
+ * a single oversize line so delivery always continues.
+ */
+export function chunkPlainCodeBlocksForDiscord(inner: string): string[] {
+	const full = markdownPlainCodeBlock(inner);
+	if (full.length <= DISCORD_MESSAGE_CONTENT_MAX) {
+		return [full];
+	}
+
+	const maxBody =
+		DISCORD_MESSAGE_CONTENT_MAX -
+		MARKDOWN_PLAIN_CODE_OPEN.length -
+		MARKDOWN_PLAIN_CODE_CLOSE.length;
+	const lines = inner.trimEnd().split('\n');
+	const chunks: string[] = [];
+	let currentLines: string[] = [];
+	let currentLen = 0;
+
+	const flush = (): void => {
+		if (currentLines.length === 0) {
+			return;
+		}
+		chunks.push(
+			`${MARKDOWN_PLAIN_CODE_OPEN}${currentLines.join('\n')}${MARKDOWN_PLAIN_CODE_CLOSE}`,
+		);
+		currentLines = [];
+		currentLen = 0;
+	};
+
+	for (const line of lines) {
+		if (line.length > maxBody) {
+			flush();
+			for (let i = 0; i < line.length; i += maxBody) {
+				chunks.push(
+					`${MARKDOWN_PLAIN_CODE_OPEN}${line.slice(i, i + maxBody)}${MARKDOWN_PLAIN_CODE_CLOSE}`,
+				);
+			}
+			continue;
+		}
+
+		const projected =
+			currentLines.length === 0 ? line.length : currentLen + 1 + line.length;
+		if (projected > maxBody) {
+			flush();
+			currentLines = [line];
+			currentLen = line.length;
+		} else {
+			currentLines.push(line);
+			currentLen = projected;
+		}
+	}
+
+	flush();
+	return chunks;
+}
+
+/** editReply the first fenced chunk, then followUp for any remaining chunks. */
+export async function replyWithPlainCodeBlockChunks(
+	interaction: ChatInputCommandInteraction,
+	inner: string,
+): Promise<void> {
+	const chunks = chunkPlainCodeBlocksForDiscord(inner);
+	await interaction.editReply({ content: chunks[0] });
+	for (const chunk of chunks.slice(1)) {
+		await interaction.followUp({ content: chunk });
+	}
 }
 
 /** Guild nickname if set, otherwise Discord display name / username. */
