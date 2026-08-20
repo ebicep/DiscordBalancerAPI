@@ -19,6 +19,21 @@ export const EXPERIMENTAL_SPECS_ORDERED: readonly string[] = [
 	'Luminary',
 ] as const;
 
+export const EXPERIMENTAL_CLASSES_ORDERED: readonly string[] = [
+	'Mage',
+	'Warrior',
+	'Paladin',
+	'Shaman',
+	'Rogue',
+	'Arcanist',
+] as const;
+
+export const EXPERIMENTAL_SPEC_TYPES_ORDERED: readonly string[] = [
+	'Damage',
+	'Tank',
+	'Healer',
+] as const;
+
 export function formatSpecBansReply(body: { bans?: string[] }): string {
 	const bans = body.bans ?? [];
 	if (bans.length === 0) {
