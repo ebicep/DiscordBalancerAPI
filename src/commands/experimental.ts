@@ -286,6 +286,17 @@ export const experimental = {
 			sub
 				.setName('logs-clear')
 				.setDescription('Clear all spec logs (POST /experimental/logs/clear)'),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('logs-untruncate')
+				.setDescription('Restore spec logs (POST /experimental/logs/untruncate)')
+				.addStringOption((o) =>
+					o
+						.setName('json')
+						.setDescription('JSON response from truncate, truncate-last, or clear')
+						.setRequired(true),
+				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -521,6 +532,76 @@ export const experimental = {
 							: `**${parsed.count}** balance(s) cleared.`;
 			await interaction.editReply({
 				content: `${prefix}`,
+				...fileOpts(files),
+			});
+			return;
+		}
+
+		if (sub === 'logs-untruncate') {
+			const payloadText = interaction.options.getString('json', true);
+
+			let parsedPayload: unknown;
+			try {
+				parsedPayload = JSON.parse(payloadText) as unknown;
+			} catch {
+				await interaction.editReply({
+					content: '`json` must be valid JSON.',
+				});
+				return;
+			}
+
+			if (
+				parsedPayload === null ||
+				typeof parsedPayload !== 'object' ||
+				!('rows' in parsedPayload) ||
+				(parsedPayload as Record<string, unknown>).rows == null
+			) {
+				await interaction.editReply({
+					content:
+						'`json` must include `rows` (paste the response JSON from a recent truncate/truncate-last/clear).',
+				});
+				return;
+			}
+
+			const serialized = JSON.stringify(parsedPayload);
+			let res: Response;
+			let requestBody: string | undefined;
+			try {
+				const out = await balancerFetch('/experimental/logs/untruncate', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: serialized,
+				});
+				res = out.response;
+				requestBody = out.requestBody;
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : 'Could not reach Balancer API.';
+				await interaction.editReply({ content: message });
+				return;
+			}
+
+			const rawBody = await res.text();
+			const files = balancerApiJsonAttachments(requestBody, rawBody);
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+					...fileOpts(files),
+				});
+				return;
+			}
+
+			const parsed = parseJsonBody(rawBody);
+			if (!isSpecLogsResponse(parsed)) {
+				await interaction.editReply({
+					content: 'Logs API returned an unexpected JSON shape.',
+					...fileOpts(files),
+				});
+				return;
+			}
+
+			await interaction.editReply({
+				content: `**${parsed.count}** logged balance(s).`,
 				...fileOpts(files),
 			});
 			return;
