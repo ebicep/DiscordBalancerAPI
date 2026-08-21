@@ -219,8 +219,17 @@ export const adjust = {
 				.addIntegerOption((o) =>
 					o
 						.setName('amount')
-						.setDescription('Amount to add (can be negative)')
+						.setDescription(
+							'Value to add, or absolute weight when set is true (can be negative)',
+						)
 						.setRequired(true),
+				)
+				.addBooleanOption((o) =>
+					o
+						.setName('set')
+						.setDescription(
+							'If true, set the value to amount instead of adding',
+						),
 				),
 		)
 		.addSubcommand((sub) =>
@@ -238,7 +247,9 @@ export const adjust = {
 				.addIntegerOption((o) =>
 					o
 						.setName('amount')
-						.setDescription('Amount to add to the spec offset (can be negative)')
+						.setDescription(
+							'Value to add to the offset, or absolute effective spec weight when set is true (can be negative)',
+						)
 						.setRequired(true),
 				)
 				.addStringOption((o) => {
@@ -250,7 +261,14 @@ export const adjust = {
 						opt.addChoices({ name: s, value: s });
 					}
 					return opt;
-				}),
+				})
+				.addBooleanOption((o) =>
+					o
+						.setName('set')
+						.setDescription(
+							'If true, set the value to amount instead of adding',
+						),
+				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
 		await interaction.deferReply();
@@ -334,13 +352,14 @@ export const adjust = {
 		if (sub === 'base') {
 			const player = interaction.options.getString('player', true).trim();
 			const amount = interaction.options.getInteger('amount', true);
+			const set = interaction.options.getBoolean('set') ?? false;
 			if (player === '') {
 				await interaction.editReply({
 					content: '`player` is required.',
 				});
 				return;
 			}
-			const body = JSON.stringify({ amount });
+			const body = JSON.stringify({ amount, set });
 			const { response: res, requestBody } = await balancerFetch(
 				`/adjust/base/${encodeURIComponent(player)}`,
 				{
@@ -390,13 +409,14 @@ export const adjust = {
 			const player = interaction.options.getString('player', true).trim();
 			const amount = interaction.options.getInteger('amount', true);
 			const spec = interaction.options.getString('spec', true);
+			const set = interaction.options.getBoolean('set') ?? false;
 			if (player === '') {
 				await interaction.editReply({
 					content: '`player` is required.',
 				});
 				return;
 			}
-			const body = JSON.stringify({ amount, spec });
+			const body = JSON.stringify({ amount, spec, set });
 			const { response: res, requestBody } = await balancerFetch(
 				`/adjust/spec/${encodeURIComponent(player)}`,
 				{
