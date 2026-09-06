@@ -112,3 +112,41 @@ export function baseWeightLeaderboardEmbed(
 		.setFooter({ text: `Page ${page}` })
 		.setTimestamp();
 }
+
+export type AverageWeightLeaderboardEntryJson = {
+	uuid?: string;
+	name?: string;
+	'average-weight'?: number;
+};
+
+export function averageWeightLeaderboardEmbed(
+	page: number,
+	entries: AverageWeightLeaderboardEntryJson[],
+): EmbedBuilder {
+	const maxDescLen = 4096;
+	const overhead = 8;
+
+	let inner: string;
+	if (entries.length === 0) {
+		inner = '(none)';
+	} else {
+		const skip = (page - 1) * 25;
+		const lines = entries.map((e, i) => {
+			const rank = skip + i + 1;
+			const name = e.name ?? '?';
+			const weight = Number(e['average-weight'] ?? 0).toFixed(2);
+			return `${rank}. ${name} - ${weight}`;
+		});
+		inner = lines.join('\n');
+		if (inner.length > maxDescLen - overhead) {
+			inner = inner.slice(0, maxDescLen - overhead - 1) + '…';
+		}
+	}
+
+	return new EmbedBuilder()
+		.setColor(BALANCER_EMBED_BLUE)
+		.setTitle('Average Spec Weights Leaderboard')
+		.setDescription(`\`\`\`\n${inner}\n\`\`\``)
+		.setFooter({ text: `Page ${page}` })
+		.setTimestamp();
+}

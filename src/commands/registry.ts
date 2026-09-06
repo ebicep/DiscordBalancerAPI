@@ -16,6 +16,7 @@ import { experimentalWeeklySpecs } from './experimentalWeeklySpecs.js';
 import { experimentalSeason } from './experimentalSeason.js';
 import { experimentalSeasonAll } from './experimentalSeasonAll.js';
 import { experimentalSeasonSpecs } from './experimentalSeasonSpecs.js';
+import { averageLeaderboard } from './averageLeaderboard.js';
 import { baseLeaderboard } from './baseLeaderboard.js';
 import { experimentalLeaderboard } from './experimentalLeaderboard.js';
 import { experimentalSpecWeights } from './experimentalSpecWeights.js';
@@ -56,6 +57,7 @@ export const commands: Command[] = [
 	experimentalSpecWeights,
 	experimentalSpecBans,
 	requestSpec,
+	averageLeaderboard,
 	baseLeaderboard,
 	experimentalLeaderboard,
 	names,
