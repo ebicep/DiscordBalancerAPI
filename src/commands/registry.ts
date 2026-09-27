@@ -23,6 +23,7 @@ import { experimentalSpecWeights } from './experimentalSpecWeights.js';
 import { experimentalSpecBans } from './experimentalSpecBans.js';
 import { requestSpec } from './requestSpec.js';
 import { names } from './names.js';
+import { patch } from './patch.js';
 import { regular } from './regular.js';
 import { ping } from './ping.js';
 import { player } from './player.js';
@@ -62,6 +63,7 @@ export const commands: Command[] = [
 	baseLeaderboard,
 	experimentalLeaderboard,
 	names,
+	patch,
 	ping,
 	regular,
 	player,
