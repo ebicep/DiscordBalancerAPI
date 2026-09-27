@@ -13,15 +13,18 @@ import {
 	EXPERIMENTAL_SPECS_ORDERED,
 	SPECS_BY_CLASS,
 } from '../util/experimentalSpecs.js';
-import { parseJsonBody } from '../util/jsonDiscordAttachment.js';
-import { runInReplyThread } from '../util/replyThread.js';
+import {
+	balancerApiJsonAttachments,
+	parseJsonBody,
+} from '../util/jsonDiscordAttachment.js';
+import { runInReplyThread, sendBalancerFilesToThread } from '../util/replyThread.js';
 import {
 	formatWeekChartLabel,
 	renderClassWeightCompositePng,
 	renderWeightChartPng,
 } from '../util/weightHistoryCharts.js';
 
-type SpecWeightsPoint = Record<string, number>;
+type SpecOffsetsPoint = Record<string, number>;
 
 type WeeklyWeightPoint = {
 	weekId?: number;
@@ -32,8 +35,8 @@ type WeeklyWeightPoint = {
 	IsCurrentWeek?: boolean;
 	baseWeight?: number;
 	BaseWeight?: number;
-	specWeights?: SpecWeightsPoint;
-	SpecWeights?: SpecWeightsPoint;
+	specOffsets?: SpecOffsetsPoint;
+	SpecOffsets?: SpecOffsetsPoint;
 };
 
 type WeightHistoryBody = {
@@ -51,12 +54,12 @@ function readWeek(point: WeeklyWeightPoint) {
 		timestamp: point.timestamp ?? point.Timestamp ?? '',
 		isCurrentWeek: point.isCurrentWeek ?? point.IsCurrentWeek ?? false,
 		baseWeight: point.baseWeight ?? point.BaseWeight ?? 0,
-		specWeights: point.specWeights ?? point.SpecWeights ?? {},
+		specOffsets: point.specOffsets ?? point.SpecOffsets ?? {},
 	};
 }
 
-function readSpecWeight(specWeights: SpecWeightsPoint, spec: string): number {
-	const v = specWeights[spec] ?? specWeights[spec.toLowerCase()];
+function readSpecOffset(specOffsets: SpecOffsetsPoint, spec: string): number {
+	const v = specOffsets[spec] ?? specOffsets[spec.toLowerCase()];
 	return typeof v === 'number' ? v : 0;
 }
 
@@ -131,9 +134,9 @@ export const statsWeight = {
 			files: [baseAttachment],
 		});
 
-		const seriesBySpec: Record<string, number[]> = {};
+		const seriesBySpecOffset: Record<string, number[]> = {};
 		for (const spec of EXPERIMENTAL_SPECS_ORDERED) {
-			seriesBySpec[spec] = weeks.map((w) => readSpecWeight(w.specWeights, spec));
+			seriesBySpecOffset[spec] = weeks.map((w) => readSpecOffset(w.specOffsets, spec));
 		}
 
 		const compositeResults = await Promise.all(
@@ -143,7 +146,7 @@ export const statsWeight = {
 					className,
 					specs,
 					labels,
-					seriesBySpec,
+					seriesBySpecOffset,
 				);
 				const slug = classSlug(className);
 				return {
@@ -157,7 +160,12 @@ export const statsWeight = {
 
 		compositeResults.sort((a, b) => a.classIndex - b.classIndex);
 
+		const responseFiles = balancerApiJsonAttachments(undefined, rawBody);
+
 		const onNoThreadParent = async (): Promise<void> => {
+			if (responseFiles.length > 0) {
+				await interaction.followUp({ files: responseFiles });
+			}
 			for (const item of compositeResults) {
 				const slug = classSlug(item.className);
 				const classEmbed = new EmbedBuilder()
@@ -180,6 +188,7 @@ export const statsWeight = {
 			onNoThreadParent,
 			onThreadOpenError: onNoThreadParent,
 			inThread: async (thread) => {
+				await sendBalancerFilesToThread(thread, responseFiles);
 				for (const item of compositeResults) {
 					const slug = classSlug(item.className);
 					const classEmbed = new EmbedBuilder()

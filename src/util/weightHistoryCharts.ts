@@ -101,18 +101,60 @@ export function buildWeightLineConfig(
 	};
 }
 
-function buildSubplotConfig(
+/** Plot −offset so a larger offset reads lower on the chart (spec weight = base − offset). */
+function buildSpecOffsetSubplotConfig(
 	labels: string[],
-	values: number[],
+	offsets: number[],
 	title: string,
 	color: string,
 ): ChartConfiguration {
-	const config = buildWeightLineConfig(labels, values, title, color);
-	config.options = {
-		...config.options,
-		layout: { padding: { top: 20, bottom: 4 } },
+	const plotValues = offsets.map((offset) => -offset);
+	return {
+		type: 'line',
+		data: {
+			labels,
+			datasets: [
+				{
+					label: title,
+					data: plotValues,
+					borderColor: color,
+					backgroundColor: FILL_BY_BORDER[color] ?? 'rgba(88, 101, 242, 0.15)',
+					fill: true,
+					tension: 0.25,
+					datalabels: {
+						align: 'top',
+						anchor: 'end',
+						color,
+						font: { weight: 'bold', size: 11 },
+						formatter: (plotValue: number) => String(plotValue),
+					},
+				},
+			],
+		},
+		options: {
+			layout: { padding: { top: 20, bottom: 4 } },
+			plugins: {
+				legend: { display: false },
+				title: {
+					display: true,
+					text: title,
+					color: '#f2f3f5',
+				},
+				datalabels: { display: true },
+			},
+			scales: {
+				x: {
+					ticks: { ...axisTick, maxRotation: 45, minRotation: 0 },
+					grid: axisGrid,
+				},
+				y: {
+					ticks: { ...axisTick, precision: 0 },
+					grid: axisGrid,
+					title: { display: true, text: '−offset', color: '#b5bac1' },
+				},
+			},
+		},
 	};
-	return config;
 }
 
 async function stackPngsVertical(buffers: Buffer[], gapPx = 8): Promise<Buffer> {
@@ -145,13 +187,13 @@ export async function renderClassWeightCompositePng(
 	className: string,
 	specs: readonly [string, string, string],
 	labels: string[],
-	seriesBySpec: Readonly<Record<string, number[]>>,
+	seriesBySpecOffset: Readonly<Record<string, number[]>>,
 ): Promise<Buffer> {
 	const buffers = await Promise.all(
 		specs.map((spec, index) => {
-			const values = seriesBySpec[spec] ?? [];
+			const offsets = seriesBySpecOffset[spec] ?? [];
 			const color = SPEC_LINE_COLORS[index] ?? SPEC_LINE_COLORS[0];
-			const configuration = buildSubplotConfig(labels, values, spec, color);
+			const configuration = buildSpecOffsetSubplotConfig(labels, offsets, spec, color);
 			return subplotRenderer.renderToBuffer(configuration);
 		}),
 	);
