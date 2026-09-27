@@ -3,12 +3,16 @@ import { type ChatInputCommandInteraction, MessageFlags, SlashCommandBuilder } f
 import { balancerFetch } from '../api/balancerApi.js';
 import { MAX_MESSAGE_BLOCK_LEN } from '../discordLimits.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
-import { takeLinesUntilBudget } from '../util/discordText.js';
+import { resolveOptionalPlayerName } from '../util/coordinatorPlayer.js';
+import {
+	chunkPlainCodeBlocksForDiscord,
+	takeLinesUntilBudget,
+} from '../util/discordText.js';
 import {
 	balancerApiJsonAttachments,
 	parseJsonBody,
 } from '../util/jsonDiscordAttachment.js';
-import { runInReplyThread } from '../util/replyThread.js';
+import { runInReplyThread, sendBalancerFilesToThread } from '../util/replyThread.js';
 
 const SPECS: readonly string[] = [
 	'Pyromancer',
@@ -33,6 +37,14 @@ const SPECS: readonly string[] = [
 
 function signed(n: number): string {
 	return n >= 0 ? `+${n}` : `${n}`;
+}
+
+function formatAdjustHistoryDate(iso: string): string {
+	const d = new Date(iso);
+	const y = d.getUTCFullYear();
+	const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+	const day = String(d.getUTCDate()).padStart(2, '0');
+	return `${y}/${m}/${day}`;
 }
 
 function formatAdjustLine(
@@ -137,6 +149,169 @@ type SpecAdjustBody = {
 	previousSpecWeight: number;
 	newSpecWeight: number;
 };
+
+type BaseHistoryEntry = {
+	id: string;
+	date: string;
+	source: string;
+	previousWeight: number;
+	newWeight: number;
+};
+
+type BaseHistoryBody = {
+	name: string;
+	uuid: string;
+	entries: BaseHistoryEntry[];
+};
+
+type SpecHistoryEntry = {
+	id: string;
+	date: string;
+	source: string;
+	spec: string;
+	weekKey: number | null;
+	wins: number | null;
+	losses: number | null;
+	adjusted: number | null;
+	previousOffset: number;
+	newOffset: number;
+	previousSpecWeight: number;
+	newSpecWeight: number;
+};
+
+type SpecHistoryBody = {
+	name: string;
+	uuid: string;
+	entries: SpecHistoryEntry[];
+};
+
+function formatBaseHistoryLine(entry: BaseHistoryEntry): string {
+	const date = `[${formatAdjustHistoryDate(entry.date)}]`;
+	const tag = entry.source === 'auto' ? 'Auto' : 'Manual';
+	const diff = entry.newWeight - entry.previousWeight;
+	return `${date} [${tag}] (BASE) (${entry.previousWeight} > ${entry.newWeight}) (${signed(diff)})`;
+}
+
+function formatSpecHistoryLine(entry: SpecHistoryEntry): string {
+	const date = `[${formatAdjustHistoryDate(entry.date)}]`;
+	if (entry.source === 'auto') {
+		return `${date} [Auto] (${entry.spec}) (Week ${entry.weekKey ?? '?'}) (Weight ${entry.previousSpecWeight} > ${entry.newSpecWeight}) (Offset ${entry.previousOffset} > ${entry.newOffset})`;
+	}
+	return `${date} [Manual] (${entry.spec}) (Spec Weight ${entry.previousSpecWeight} > ${entry.newSpecWeight}) (Offset ${entry.previousOffset} > ${entry.newOffset})`;
+}
+
+type PlayerLookupBody = {
+	uuid?: string;
+	Uuid?: string;
+};
+
+async function resolveBalancerPlayerUuid(
+	playerKey: string,
+): Promise<{ uuid: string } | { message: string }> {
+	const { response: res } = await balancerFetch(
+		`/player/${encodeURIComponent(playerKey)}`,
+		{ method: 'GET' },
+	);
+	const rawBody = await res.text();
+	if (!res.ok) {
+		return { message: formatFailedApiBody(res.status, rawBody) };
+	}
+	const parsed = parseJsonBody(rawBody) as PlayerLookupBody;
+	const uuid = parsed.uuid ?? parsed.Uuid;
+	if (typeof uuid !== 'string' || uuid.trim() === '') {
+		return { message: 'Player response missing uuid.' };
+	}
+	return { uuid: uuid.trim() };
+}
+
+function historyResponseTitle(
+	body: { name: string; uuid: string; entries: unknown[] },
+	kind: 'base' | 'spec',
+): string {
+	const label = body.name && body.name !== '' ? body.name : body.uuid;
+	const kindWord = kind === 'base' ? 'Base' : 'Spec';
+	const count = body.entries?.length ?? 0;
+	return `${label} ${kindWord} Adjustment History (${count} Entries)`;
+}
+
+async function deliverAdjustHistory(
+	interaction: ChatInputCommandInteraction,
+	kind: 'base' | 'spec',
+	uuid: string,
+): Promise<void> {
+	const path =
+		kind === 'base'
+			? `/adjust/history/base/${encodeURIComponent(uuid)}`
+			: `/adjust/history/spec/${encodeURIComponent(uuid)}`;
+	const threadSuffix =
+		kind === 'base' ? 'Base Adjust History' : 'Spec Adjust History';
+
+	const { response: res, requestBody } = await balancerFetch(path, {
+		method: 'GET',
+	});
+	const rawBody = await res.text();
+	const files = balancerApiJsonAttachments(requestBody, rawBody);
+
+	if (!res.ok) {
+		await interaction.editReply({
+			content: formatFailedApiBody(res.status, rawBody),
+		});
+		await postRequestResponseArtifacts(
+			interaction,
+			files,
+			`Adjust history — HTTP ${res.status}`,
+		);
+		return;
+	}
+
+	const parsed =
+		kind === 'base'
+			? (parseJsonBody(rawBody) as BaseHistoryBody)
+			: (parseJsonBody(rawBody) as SpecHistoryBody);
+
+	const entries = parsed.entries ?? [];
+	const lines =
+		kind === 'base'
+			? entries.map((e) => formatBaseHistoryLine(e as BaseHistoryEntry))
+			: entries.map((e) => formatSpecHistoryLine(e as SpecHistoryEntry));
+	const inner = lines.join('\n');
+	const chunks = chunkPlainCodeBlocksForDiscord(
+		inner.length > 0 ? inner : '_No history entries._',
+	);
+	const displayName =
+		parsed.name && parsed.name !== '' ? parsed.name : parsed.uuid;
+
+	await interaction.editReply({
+		content: historyResponseTitle(parsed, kind),
+	});
+
+	const onNoThreadParent = async (): Promise<void> => {
+		if (chunks.length > 0) {
+			await interaction.followUp({ content: chunks[0] });
+			for (const chunk of chunks.slice(1)) {
+				await interaction.followUp({ content: chunk });
+			}
+		}
+		if (files.length > 0) {
+			await interaction.followUp({ files });
+		}
+	};
+
+	await runInReplyThread({
+		interaction,
+		threadTitle: `${displayName} — ${threadSuffix}`,
+		threadTitleWhenEmpty: 'Adjust history',
+		logLabel: `adjust history-${kind}: failed to post history`,
+		onNoThreadParent,
+		onThreadOpenError: onNoThreadParent,
+		inThread: async (thread) => {
+			for (const chunk of chunks) {
+				await thread.send({ content: chunk });
+			}
+			await sendBalancerFilesToThread(thread, files);
+		},
+	});
+}
 
 function autoDailyThreadTitle(body: AutoDailyBody): string {
 	const first = (body.adjusted ?? [])[0];
@@ -268,6 +443,32 @@ export const adjust = {
 						.setDescription(
 							'If true, set the value to amount instead of adding',
 						),
+				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('history-base')
+				.setDescription(
+					'View merged base adjustment history (GET /adjust/history/base/{uuid})',
+				)
+				.addStringOption((o) =>
+					o
+						.setName('name')
+						.setDescription('Player name or UUID')
+						.setRequired(false),
+				),
+		)
+		.addSubcommand((sub) =>
+			sub
+				.setName('history-spec')
+				.setDescription(
+					'View merged spec adjustment history (GET /adjust/history/spec/{uuid})',
+				)
+				.addStringOption((o) =>
+					o
+						.setName('name')
+						.setDescription('Player name or UUID')
+						.setRequired(false),
 				),
 		),
 	async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -456,6 +657,21 @@ export const adjust = {
 					parsed.previousSpecWeight,
 					parsed.newSpecWeight,
 				),
+			);
+			return;
+		}
+
+		if (sub === 'history-base' || sub === 'history-spec') {
+			const effectiveName = resolveOptionalPlayerName(interaction);
+			const resolved = await resolveBalancerPlayerUuid(effectiveName);
+			if ('message' in resolved) {
+				await interaction.editReply({ content: resolved.message });
+				return;
+			}
+			await deliverAdjustHistory(
+				interaction,
+				sub === 'history-base' ? 'base' : 'spec',
+				resolved.uuid,
 			);
 		}
 	},
