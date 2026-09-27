@@ -19,6 +19,16 @@ export const EXPERIMENTAL_SPECS_ORDERED: readonly string[] = [
 	'Luminary',
 ] as const;
 
+/** Three specs per class, in Damage / Tank / Healer order (matches EXPERIMENTAL_SPECS_ORDERED). */
+export const SPECS_BY_CLASS: readonly (readonly string[])[] = (() => {
+	const specs = EXPERIMENTAL_SPECS_ORDERED;
+	const groups: string[][] = [];
+	for (let i = 0; i < specs.length; i += 3) {
+		groups.push([specs[i]!, specs[i + 1]!, specs[i + 2]!]);
+	}
+	return groups;
+})();
+
 export const EXPERIMENTAL_CLASSES_ORDERED: readonly string[] = [
 	'Mage',
 	'Warrior',

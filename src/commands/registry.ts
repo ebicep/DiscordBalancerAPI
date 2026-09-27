@@ -27,6 +27,7 @@ import { regular } from './regular.js';
 import { ping } from './ping.js';
 import { player } from './player.js';
 import { settings } from './settings.js';
+import { statsWeight } from './statsWeight.js';
 import { test } from './test.js';
 import { time } from './time.js';
 import { timecurrent } from './timecurrent.js';
@@ -65,6 +66,7 @@ export const commands: Command[] = [
 	regular,
 	player,
 	settings,
+	statsWeight,
 	test,
 	time,
 	timecurrent,
