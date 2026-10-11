@@ -1,5 +1,5 @@
 # Build stage: full deps + tsc
-FROM node:lts-alpine AS build
+FROM node:lts-bookworm-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -8,7 +8,7 @@ COPY src ./src
 RUN npm run build
 
 # Runtime: production deps only + compiled JS
-FROM node:lts-alpine
+FROM node:lts-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
