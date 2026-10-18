@@ -161,33 +161,46 @@ function isUuid(s: string): boolean {
 	return UUID_RE.test(s.trim());
 }
 
-/** One line per restored player: `UUID (NAME) > SPEC` inside a plain code block. */
+function formatExperimentalUnrunPlayerLine(row: Record<string, unknown>): string {
+	const uuid =
+		typeof row.uuid === 'string'
+			? row.uuid
+			: row.uuid != null
+				? String(row.uuid)
+				: '?';
+	const name = typeof row.name === 'string' ? row.name : '?';
+	const spec = typeof row.spec === 'string' ? row.spec : '?';
+	return `${uuid} (${name}) > ${spec}`;
+}
+
+function unrunPlayerRowsFromParsed(parsed: unknown, key: string): unknown[] {
+	if (parsed === null || typeof parsed !== 'object' || !(key in parsed)) {
+		return [];
+	}
+	const rows = (parsed as Record<string, unknown>)[key];
+	return Array.isArray(rows) ? rows : [];
+}
+
+/** One line per affected player: `UUID (NAME) > SPEC` inside a plain code block. */
 function formatExperimentalUnrunRestoredContent(parsed: unknown): string {
-	if (parsed === null || typeof parsed !== 'object' || !('restored' in parsed)) {
-		return plainCodeBlockWithinDiscordContentLimit('(none)');
-	}
-	const restored = (parsed as Record<string, unknown>).restored;
-	if (!Array.isArray(restored) || restored.length === 0) {
-		return plainCodeBlockWithinDiscordContentLimit('(none)');
-	}
 	const lines: string[] = [];
-	for (const item of restored) {
-		if (item === null || typeof item !== 'object') {
-			continue;
+	for (const key of ['restored', 'cooldown_increased'] as const) {
+		for (const item of unrunPlayerRowsFromParsed(parsed, key)) {
+			if (item === null || typeof item !== 'object') {
+				continue;
+			}
+			lines.push(formatExperimentalUnrunPlayerLine(item as Record<string, unknown>));
 		}
-		const row = item as Record<string, unknown>;
-		const uuid =
-			typeof row.uuid === 'string'
-				? row.uuid
-				: row.uuid != null
-					? String(row.uuid)
-					: '?';
-		const name = typeof row.name === 'string' ? row.name : '?';
-		const spec = typeof row.spec === 'string' ? row.spec : '?';
-		lines.push(`${uuid} (${name}) > ${spec}`);
 	}
 	const inner = lines.length > 0 ? lines.join('\n') : '(none)';
 	return plainCodeBlockWithinDiscordContentLimit(inner);
+}
+
+function countExperimentalUnrunUpdated(parsed: unknown): number {
+	return (
+		unrunPlayerRowsFromParsed(parsed, 'restored').length +
+		unrunPlayerRowsFromParsed(parsed, 'cooldown_increased').length
+	);
 }
 
 export function parsePlayersString(raw: string): string[] {
@@ -682,16 +695,10 @@ export const experimental = {
 			}
 
 			const parsed = parseJsonBody(rawBody);
-			const restoredCount =
-				parsed !== null &&
-				typeof parsed === 'object' &&
-				'restored' in parsed &&
-				Array.isArray((parsed as Record<string, unknown>).restored)
-					? (parsed as { restored: unknown[] }).restored.length
-					: 0;
+			const updatedCount = countExperimentalUnrunUpdated(parsed);
 			const listing = formatExperimentalUnrunRestoredContent(parsed);
 			await interaction.editReply({
-				content: `**${restoredCount}** spec request(s) restored.\n${listing}`,
+				content: `**${updatedCount}** spec request(s) updated.\n${listing}`,
 				...fileOpts(files),
 			});
 			return;
