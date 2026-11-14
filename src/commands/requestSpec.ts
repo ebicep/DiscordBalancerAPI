@@ -3,7 +3,7 @@ import { type ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.j
 import { balancerFetch } from '../api/balancerApi.js';
 import { formatFailedApiBody } from '../util/apiErrorMessage.js';
 import { resolveOptionalPlayerName } from '../util/coordinatorPlayer.js';
-import { EXPERIMENTAL_SPECS_ORDERED } from '../util/experimentalSpecs.js';
+import { EXPERIMENTAL_SPECS_REQUESTABLE } from '../util/experimentalSpecs.js';
 import { parseJsonBody } from '../util/jsonDiscordAttachment.js';
 
 export const requestSpec = {
@@ -15,7 +15,7 @@ export const requestSpec = {
 				.setName('spec')
 				.setDescription('Spec to request')
 				.setRequired(true);
-			for (const s of EXPERIMENTAL_SPECS_ORDERED) {
+			for (const s of EXPERIMENTAL_SPECS_REQUESTABLE) {
 				opt.addChoices({ name: s, value: s });
 			}
 			return opt;

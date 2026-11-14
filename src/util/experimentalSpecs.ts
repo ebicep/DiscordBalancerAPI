@@ -19,6 +19,12 @@ export const EXPERIMENTAL_SPECS_ORDERED: readonly string[] = [
 	'Luminary',
 ] as const;
 
+/** Specs excluded from `/request-spec` (matches BalancerAPI ExperimentalSpecs.SpecRequestBlocked). */
+export const SPEC_REQUEST_BLOCKED = new Set<string>(['Spiritguard']);
+
+export const EXPERIMENTAL_SPECS_REQUESTABLE: readonly string[] =
+	EXPERIMENTAL_SPECS_ORDERED.filter((s) => !SPEC_REQUEST_BLOCKED.has(s));
+
 /** Three specs per class, in Damage / Tank / Healer order (matches EXPERIMENTAL_SPECS_ORDERED). */
 export const SPECS_BY_CLASS: readonly (readonly string[])[] = (() => {
 	const specs = EXPERIMENTAL_SPECS_ORDERED;
