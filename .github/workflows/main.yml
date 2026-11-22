@@ -6,6 +6,10 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: deploy-bot
+  cancel-in-progress: false
+
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -27,3 +31,19 @@ jobs:
         with:
           push: true
           tags: ebicep/discord_balancer_api_bot:latest
+
+  deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd ~/discord-bot
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
