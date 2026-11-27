@@ -311,6 +311,24 @@ export const experimental = {
 		)
 		.addSubcommand((sub) =>
 			sub
+				.setName('lineup')
+				.setDescription('Random lineup specs for player count (GET /experimental/lineup)')
+				.addIntegerOption((o) =>
+					o
+						.setName('player_count')
+						.setDescription('Team size (6–14)')
+						.setRequired(true)
+						.setMinValue(6)
+						.setMaxValue(14),
+				)
+				.addIntegerOption((o) =>
+					o
+						.setName('seed')
+						.setDescription('Optional RNG seed for a reproducible lineup'),
+				),
+		)
+		.addSubcommand((sub) =>
+			sub
 				.setName('logs')
 				.setDescription('Spec assignment history (GET /experimental/logs)'),
 		)
@@ -524,6 +542,54 @@ export const experimental = {
 			const pretty = parseJsonBody(rawBody);
 			await interaction.editReply({
 				files: [jsonDiscordAttachment('response.json', pretty)],
+			});
+			return;
+		}
+
+		if (sub === 'lineup') {
+			const playerCount = interaction.options.getInteger('player_count', true);
+			const seed = interaction.options.getInteger('seed');
+			const query =
+				seed === null
+					? `?playerCount=${playerCount}`
+					: `?playerCount=${playerCount}&seed=${seed}`;
+			let res: Response;
+			try {
+				const out = await balancerFetch(`/experimental/lineup${query}`, {
+					method: 'GET',
+				});
+				res = out.response;
+			} catch (err) {
+				const message =
+					err instanceof Error ? err.message : 'Could not reach Balancer API.';
+				await interaction.editReply({ content: message });
+				return;
+			}
+			const rawBody = await res.text();
+			if (!res.ok) {
+				await interaction.editReply({
+					content: formatFailedApiBody(res.status, rawBody),
+				});
+				return;
+			}
+			const parsed = parseJsonBody(rawBody) as {
+				player_count?: number;
+				specs?: string[];
+				seed?: number | null;
+			};
+			const specs = parsed.specs;
+			if (!Array.isArray(specs)) {
+				await interaction.editReply({
+					content: 'Lineup API returned an unexpected JSON shape.',
+					files: [jsonDiscordAttachment('response.json', parsed)],
+				});
+				return;
+			}
+			const seedNote =
+				parsed.seed != null ? ` (seed **${parsed.seed}**)` : '';
+			const lines = specs.map((spec, i) => `${i + 1}. ${spec}`).join('\n');
+			await interaction.editReply({
+				content: `**${playerCount}** players${seedNote}\n${lines}`,
 			});
 			return;
 		}
