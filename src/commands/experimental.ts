@@ -593,7 +593,7 @@ export const experimental = {
 				...specs.filter((spec) => !knownSpecs.has(spec)),
 			];
 			const block = plainCodeBlockWithinDiscordContentLimit(
-				orderedSpecs.join('\n'),
+				orderedSpecs.map((spec, i) => `${i + 1}. ${spec}`).join('\n'),
 			);
 			const seedPrefix =
 				parsed.seed != null ? `Seed **${parsed.seed}**\n` : '';
