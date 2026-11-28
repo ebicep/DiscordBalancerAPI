@@ -28,6 +28,7 @@ import {
 } from '../util/balanceResultChannelEmbed.js';
 import { formatInputTrajectoryDiscordContent } from '../util/inputTrajectoryReply.js';
 import { plainCodeBlockWithinDiscordContentLimit } from '../util/discordText.js';
+import { EXPERIMENTAL_SPECS_ORDERED } from '../util/experimentalSpecs.js';
 import {
 	isPublicThreadParentChannel,
 	runInReplyThread,
@@ -585,11 +586,19 @@ export const experimental = {
 				});
 				return;
 			}
-			const seedNote =
-				parsed.seed != null ? ` (seed **${parsed.seed}**)` : '';
-			const lines = specs.map((spec, i) => `${i + 1}. ${spec}`).join('\n');
+			const lineupSet = new Set(specs);
+			const knownSpecs = new Set<string>(EXPERIMENTAL_SPECS_ORDERED);
+			const orderedSpecs = [
+				...EXPERIMENTAL_SPECS_ORDERED.filter((spec) => lineupSet.has(spec)),
+				...specs.filter((spec) => !knownSpecs.has(spec)),
+			];
+			const block = plainCodeBlockWithinDiscordContentLimit(
+				orderedSpecs.join('\n'),
+			);
+			const seedPrefix =
+				parsed.seed != null ? `Seed **${parsed.seed}**\n` : '';
 			await interaction.editReply({
-				content: `**${playerCount}** players${seedNote}\n${lines}`,
+				content: `${seedPrefix}${block}`,
 			});
 			return;
 		}
